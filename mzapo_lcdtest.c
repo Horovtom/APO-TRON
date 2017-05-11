@@ -12,6 +12,9 @@
 
  *******************************************************************/
 
+
+
+//http://www.binarytides.com/programming-udp-sockets-c-linux/
 #define _POSIX_C_SOURCE 200112L
 
 #include <sys/mman.h>
@@ -384,11 +387,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     for (int i = 0; i < HEIGHT; ++i) {
         for (int j = 0; j < WIDTH; ++j) {
             if (i > 5 && i < 10 && j > 5 && j < 10) {
-                if (netstatus == 1) {
                     canvas[i][j] = col;
-                } else {
-                    canvas[i][j] = col;
-                }
             } else {
                 canvas[i][j] = 0;
             }
