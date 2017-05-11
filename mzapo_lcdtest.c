@@ -20,11 +20,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <malloc.h>
-#include <string.h>
-#include <byteswap.h>
-#include <getopt.h>
-#include <inttypes.h>
 #include <time.h>
 
 char *memdev = "/dev/mem";
@@ -50,8 +45,8 @@ char *memdev = "/dev/mem";
 
 #define PARLCD_REG_CMD_o                0x0008
 #define PARLCD_REG_DATA_o               0x000C
-const int HEIGHT = 320/LINEWIDTH;
-const int WIDTH = 480/LINEWIDTH;
+#define HEIGHT 32
+#define WIDTH 48
 void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
     unsigned long mem_window_size;
     unsigned long pagesize;
@@ -302,6 +297,118 @@ void writeToLCD (int colours[3], int map[HEIGHT][WIDTH], unsigned char *parlcd_m
 
 }
 
+//NETWORKING
+//are we connected to another player
+int netstatus = 0;
+//are we a server?
+int server = 0;
+int connectCounter = 0;
+int CONNECTDELAY = 2;
+
+void broadcast() {
+    if (connectCounter > CONNECTDELAY) {
+        printf("Connecting\n");
+        connectCounter = 0;
+    } else {
+        connectCounter++;
+    }
+}
+
+// ------------
+//game values
+int x = 20;
+int y = 20;
+int player_colours[7] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0};
+int gameworld[HEIGHT][WIDTH];
+int canvas[HEIGHT][WIDTH];
+int gamestatus = 0;
+
+void gameLoop(int r, int g, int b, int button, uint32_t dir) {
+    switch (dir) {
+        case NORTH:
+            y--;
+            break;
+        case EAST:
+            x++;
+            break;
+        case SOUTH:
+            y++;
+            break;
+        case WEST:
+            x--;
+            break;
+    }
+    if (button) {
+        gamestatus = 0;
+    }
+    if (gameworld[y][x] != player_colours[0]) {
+        for (int i = 0; i < HEIGHT; ++i) {
+            for (int j = 0; j < WIDTH; ++j) {
+                if (gameworld[i][j] == player_colours[2]) gameworld[i][j] = player_colours[0];
+            }
+
+        }
+        x = 20;
+        y = 20;
+    }
+    gameworld[y][x] = player_colours[2];
+}
+
+void menuLoop(int r, int g, int b, int button, uint32_t dir) {
+    broadcast();
+    int col = player_colours[0];
+    //
+    switch (dir) {
+        case NORTH:
+            server = 1;
+            col = player_colours[1];
+            if (button) {
+                col = player_colours[3];
+                gamestatus = 1;
+            }
+            break;
+        case EAST:
+            server = 0;
+            col = player_colours[0];
+            break;
+        case SOUTH:
+            server = 0;
+            col = player_colours[0];
+            break;
+        case WEST:
+            server = 0;
+            col = player_colours[0];
+            break;
+    }
+    //
+    for (int i = 0; i < HEIGHT; ++i) {
+        for (int j = 0; j < WIDTH; ++j) {
+            if (i > 5 && i < 10 && j > 5 && j < 10) {
+                if (netstatus == 1) {
+                    canvas[i][j] = col;
+                } else {
+                    canvas[i][j] = col;
+                }
+            } else {
+                canvas[i][j] = 0;
+            }
+        }
+
+    }
+}
+
+unsigned char *parlcd_mem_base;
+
+void logicLoop(int r, int g, int b, int button, uint32_t dir) {
+    if (gamestatus == 1) {
+        gameLoop(r, g, b, button, dir);
+        writeToLCD(player_colours, gameworld, parlcd_mem_base);
+    } else {
+        menuLoop(r, g, b, button, dir);
+        writeToLCD(player_colours, canvas, parlcd_mem_base);
+    }
+}
+
 int main(int argc, char *argv[]) {
     unsigned char *mem_base;
 
@@ -309,9 +416,8 @@ int main(int argc, char *argv[]) {
     
     if (mem_base == NULL)
         exit(1);
-    int player_colours[3] = {0x0000, 0xFFFF, 0xF800};
-    int gameworld[HEIGHT][WIDTH];
-    uint32_t rgb_knobs_value, last_val;
+    uint32_t rgb_knobs_value;
+    int last_val;
     int i, j;
     for (i = 0; i <HEIGHT ; ++i) {
         for (j = 0; j <WIDTH ; ++j) {
@@ -320,9 +426,6 @@ int main(int argc, char *argv[]) {
         }
         
     }
-    unsigned char *parlcd_mem_base;
-    int x = 20;
-    int y = 20;
     unsigned c;
 
     parlcd_mem_base = map_phys_address(PARLCD_REG_BASE_PHYS, PARLCD_REG_SIZE, 0);
@@ -364,44 +467,24 @@ int main(int argc, char *argv[]) {
         *(volatile uint32_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0010;
         *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0020;*/
         rgb_knobs_value = *(volatile uint32_t *) (mem_base + SPILED_REG_KNOBS_8BIT_o);
-        if (rgb_knobs_value > last_val){
-            dir = (dir+1)%4;
-        } else if (rgb_knobs_value < last_val){
-            dir = (dir-1)%4;
+        int b = (rgb_knobs_value) & 0xFF;
+        int g = (rgb_knobs_value >> 8) & 0xFF;
+        int r = (rgb_knobs_value >> 16) & 0xFF;
+        int button = ((rgb_knobs_value & 0x1000000) != 0);
+        if (b > last_val + 3) {
+            dir = ((dir) + 1) % 4;
+            last_val = b;
+        } else if (b < last_val - 3) {
+            dir = ((dir) - 1) % 4;
+            last_val = b;
         }
+        if (r) { if (g) { if (b); }}
 
+        logicLoop(r, g, b, button, dir);
 
-        switch (dir) {
-            case NORTH:
-                y--;
-                break;
-            case EAST:
-                x++;
-                break;
-            case SOUTH:
-                y++;
-                break;
-            case WEST:
-                x--;
-                break;
-        }
-        if (gameworld[y][x] != player_colours[0]) {
-            for (i = 0; i < HEIGHT; ++i) {
-                for (j = 0; j < WIDTH; ++j) {
-                    if (gameworld[i][j] == player_colours[2]) gameworld[i][j]=player_colours[0];
-                }
-
-            }
-            x = 20;
-            y = 20;
-        }
-        gameworld[y][x] = player_colours[2];
-
-        writeToLCD(player_colours, gameworld, parlcd_mem_base);
 
 
         clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
-        last_val = rgb_knobs_value;
     }
 
     return 0;
