@@ -1,3 +1,4 @@
-.idea/
+.idea/*
 mzapo_lcdtest
 mzapo_lcdtest.o
+.xml
