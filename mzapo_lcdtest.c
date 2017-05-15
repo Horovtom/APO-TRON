@@ -24,6 +24,22 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <memory.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <time.h>
+#include <string.h>
+#include <stdio.h>
+
+#include <unistd.h>
+#include <strings.h>
+#include <pthread.h>
+#include "writing.c"
 
 char *memdev = "/dev/mem";
 
@@ -50,6 +66,10 @@ char *memdev = "/dev/mem";
 #define PARLCD_REG_DATA_o               0x000C
 #define HEIGHT 32
 #define WIDTH 48
+#define SERVER_PORT 12346
+#define CLIENT_PORT 12345
+#define BROADCAST_ADDRESS "192.168.202.184"
+
 void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
     unsigned long mem_window_size;
     unsigned long pagesize;
@@ -284,14 +304,13 @@ void parlcd_hx8357_init(unsigned char *parlcd_mem_base) {
 #endif
 }
 
-void writeToLCD (int colours[3], int map[HEIGHT][WIDTH], unsigned char *parlcd_mem_base){
+void writeToLCD(int colours[3], int map[HEIGHT][WIDTH], unsigned char *parlcd_mem_base) {
     parlcd_write_cmd(parlcd_mem_base, 0x2c);
     for (int i = 0; i < 320; i++) {
         for (int j = 0; j < 480; j++) {
-            if ((i % LINEWIDTH == 0) || (j % LINEWIDTH == 0)){
+            if ((i % LINEWIDTH == 0) || (j % LINEWIDTH == 0)) {
                 parlcd_write_data(parlcd_mem_base, 0xFFFF);
-            }
-            else{
+            } else {
                 parlcd_write_data(parlcd_mem_base, (uint16_t) map[i / LINEWIDTH][j / LINEWIDTH]);
             }
 
@@ -357,6 +376,89 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
     gameworld[y][x] = player_colours[2];
 }
 
+int servSockFD;
+int listenSocketFD;
+pthread_t workerThread;
+int connectedPlayerCount = 0;
+
+
+void *getPlayers(void *arg) {
+    connectedPlayerCount = 0;
+    
+//TODO:COMPLETE
+    return NULL;
+}
+
+void createListener() {
+
+    if ((listenSocketFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    struct sockaddr_in bindaddr;
+
+    memset(&bindaddr, 0, sizeof(bindaddr));
+    bindaddr.sin_family = AF_INET;
+    bindaddr.sin_port = htons(CLIENT_PORT);
+    bindaddr.sin_addr.s_addr = INADDR_ANY;
+
+    int yes = 1;
+
+    if (setsockopt(listenSocketFD, SOL_SOCKET, SO_REUSEADDR, &yes,
+                   sizeof(yes)) == -1) {
+        perror("setsockopt (SO_REUSEADDR)");
+        exit(1);
+    }
+
+    if (bind(listenSocketFD, (struct sockaddr *) &bindaddr, sizeof(bindaddr)) == -1) {
+        perror("bind");
+        exit(1);
+    }
+//    char buf[256];
+//
+//    struct sockaddr_in sender;
+//    socklen_t length = sizeof(sender);
+//    recvfrom(listenSocketFD, &buf, sizeof(buf), 0, (struct sockaddr *) &sender, &length);
+}
+
+void createServer() {
+    createListener();
+    if ((servSockFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    struct sockaddr_in bindaddr;
+
+    memset(&bindaddr, 0, sizeof(bindaddr));
+    bindaddr.sin_family = AF_INET;
+    bindaddr.sin_port = htons(SERVER_PORT);
+    bindaddr.sin_addr.s_addr = INADDR_BROADCAST;
+
+    int yes = 1;
+
+    if (setsockopt(servSockFD, SOL_SOCKET, SO_REUSEADDR, &yes,
+                   sizeof(yes)) == -1) {
+        perror("setsockopt (SO_REUSEADDR)");
+        exit(1);
+    }
+
+    int broadcast = 1;
+
+    if (setsockopt(servSockFD, SOL_SOCKET, SO_BROADCAST, &broadcast,
+                   sizeof broadcast) == -1) {
+        perror("setsockopt (SO_BROADCAST)");
+        exit(1);
+    }
+
+    char buf[] = "Here is the game!";
+    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &bindaddr, sizeof(bindaddr));
+
+    pthread_create(&workerThread, NULL, getPlayers, "getting players... ");
+
+}
+
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     broadcast();
     int col = player_colours[0];
@@ -364,30 +466,25 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     switch (dir) {
         case NORTH:
             server = 1;
+            createServer();
             col = player_colours[1];
             if (button) {
                 col = player_colours[3];
                 gamestatus = 1;
             }
             break;
-        case EAST:
+        default:
             server = 0;
-            col = player_colours[0];
-            break;
-        case SOUTH:
-            server = 0;
-            col = player_colours[0];
-            break;
-        case WEST:
-            server = 0;
+            pthread_join(workerThread, NULL);
             col = player_colours[0];
             break;
     }
     //
     for (int i = 0; i < HEIGHT; ++i) {
         for (int j = 0; j < WIDTH; ++j) {
-            if (i > 5 && i < 10 && j > 5 && j < 10) {
-                    canvas[i][j] = col;
+            //if (i > 5 && i < 10 && j > 5 && j < 10) {
+            if (maskText("255.1234567", 2, 2, j, i)) {
+                canvas[i][j] = col;
             } else {
                 canvas[i][j] = 0;
             }
@@ -412,18 +509,18 @@ int main(int argc, char *argv[]) {
     unsigned char *mem_base;
 
     mem_base = map_phys_address(SPILED_REG_BASE_PHYS, SPILED_REG_SIZE, 0);
-    
+
     if (mem_base == NULL)
         exit(1);
     uint32_t rgb_knobs_value;
     int last_val;
     int i, j;
-    for (i = 0; i <HEIGHT ; ++i) {
-        for (j = 0; j <WIDTH ; ++j) {
+    for (i = 0; i < HEIGHT; ++i) {
+        for (j = 0; j < WIDTH; ++j) {
             if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) gameworld[i][j] = player_colours[1];
             else gameworld[i][j] = player_colours[0];
         }
-        
+
     }
     unsigned c;
 
@@ -480,7 +577,6 @@ int main(int argc, char *argv[]) {
         if (r) { if (g) { if (b); }}
 
         logicLoop(r, g, b, button, dir);
-
 
 
         clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
