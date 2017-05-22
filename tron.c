@@ -327,14 +327,7 @@ int server = 0;
 int connectCounter = 0;
 int CONNECTDELAY = 2;
 
-void broadcast() {
-    if (connectCounter > CONNECTDELAY) {
-        printf("Connecting\n");
-        connectCounter = 0;
-    } else {
-        connectCounter++;
-    }
-}
+
 
 // ------------
 //game values
@@ -392,7 +385,6 @@ int listenSocketFD;
 pthread_t workerThread;
 int connectedPlayerCount = 0;
 
-
 void *getPlayers(void *arg) {
     connectedPlayerCount = 0;
     
@@ -402,6 +394,7 @@ void *getPlayers(void *arg) {
 
 /**
  * Listener for broadcast
+ * Hopefully this works
  */
 void createListener() {
     if ((listenSocketFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -429,7 +422,6 @@ void createListener() {
         exit(1);
     }
 
-
     char buf[256];
 
     struct sockaddr_in sender;
@@ -437,19 +429,22 @@ void createListener() {
     recvfrom(listenSocketFD, &buf, sizeof(buf), 0, (struct sockaddr *) &sender, &length);
 }
 
+struct sockaddr_in serverSockAddr;
+
+/**
+ * Creates broadcast server
+ */
 void createServer() {
-    createListener();
     if ((servSockFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         perror("socket");
         exit(1);
     }
 
-    struct sockaddr_in bindaddr;
 
-    memset(&bindaddr, 0, sizeof(bindaddr));
-    bindaddr.sin_family = AF_INET;
-    bindaddr.sin_port = htons(SERVER_PORT);
-    bindaddr.sin_addr.s_addr = INADDR_BROADCAST;
+    memset(&serverSockAddr, 0, sizeof(serverSockAddr));
+    serverSockAddr.sin_family = AF_INET;
+    serverSockAddr.sin_port = htons(SERVER_PORT);
+    serverSockAddr.sin_addr.s_addr = INADDR_BROADCAST;
 
     int yes = 1;
 
@@ -468,21 +463,30 @@ void createServer() {
     }
 
     char buf[] = "Here is the game!";
-    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &bindaddr, sizeof(bindaddr));
-
-    pthread_create(&workerThread, NULL, getPlayers, "getting players... ");
-
+    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &serverSockAddr, sizeof(serverSockAddr));
 }
 
+int lastServer;
+
+void serverSendPing();
+
+char* getPlayerIDs() ;
+
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
-    broadcast();
-    int col = player_colours[0];
+    int col;
     //
     switch (dir) {
         case NORTH:
+            //SERVER MODE!
             server = 1;
-            createServer();
+            if(lastServer==0) {
+                createServer();
+            }
+
+            serverSendPing();
+            //Show graphic for being in server mode
             col = player_colours[1];
+            //Starting game by button
             if (button) {
                 col = player_colours[3];
                 gamestatus = 1;
@@ -494,7 +498,8 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             col = player_colours[0];
             break;
     }
-    //
+    lastServer = server;
+
     for (int i = 0; i < HEIGHT; ++i) {
         for (int j = 0; j < WIDTH; ++j) {
             //if (i > 5 && i < 10 && j > 5 && j < 10) {
@@ -506,6 +511,20 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
         }
 
     }
+}
+
+/**
+ * Broadcasts ip table of players
+ */
+void serverSendPing() {
+    char buf[128] = "Game: ";
+    strcat(buf, getPlayerIDs());
+    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &serverSockAddr, sizeof(serverSockAddr));
+}
+
+char* getPlayerIDs() {
+
+    return "";
 }
 
 unsigned char *parlcd_mem_base;
@@ -555,6 +574,9 @@ int main(int argc, char *argv[]) {
             parlcd_write_data(parlcd_mem_base, c);
         }
     }
+
+    //Creating Listener for all the comunication
+    createListener();
 
 
     /*parlcd_write_cmd(parlcd_mem_base, 0x2c);
