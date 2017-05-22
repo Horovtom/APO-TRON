@@ -27,17 +27,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <memory.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <time.h>
-#include <string.h>
-#include <stdio.h>
-
-#include <unistd.h>
-#include <strings.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include "writing.c"
 
@@ -349,6 +340,7 @@ int sim_count_alive;
 //variables for client
 int cli_pid = 0;
 int cli_dir = NORTH;
+int connectedPlayerCount = 0;
 
 //sets the game into an innitial condition and initializes variables.
 
@@ -436,7 +428,6 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
 
 int listenSocketFD;
 pthread_t workerThread;
-int connectedPlayerCount = 0;
 
 void *getPlayers(void *arg) {
     connectedPlayerCount = 0;
