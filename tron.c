@@ -88,7 +88,7 @@ void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
     mem_window_size = ((region_base & (pagesize - 1)) + region_size + pagesize - 1) & ~(pagesize - 1);
 
     mm = mmap(NULL, mem_window_size, PROT_WRITE | PROT_READ,
-              MAP_SHARED, fd, region_base & ~(pagesize - 1));
+            MAP_SHARED, fd, region_base & ~(pagesize - 1));
     mem = mm + (region_base & (pagesize - 1));
 
     if (mm == MAP_FAILED) {
@@ -113,90 +113,90 @@ void parlcd_write_data2x(unsigned char *parlcd_mem_base, uint32_t data) {
 
 void parlcd_delay(int msec) {
     struct timespec wait_delay = {.tv_sec = msec / 1000,
-            .tv_nsec = (msec % 1000) * 1000 * 1000};
+        .tv_nsec = (msec % 1000) * 1000 * 1000};
     clock_nanosleep(CLOCK_MONOTONIC, 0, &wait_delay, NULL);
 }
 
 void parlcd_hx8357_init(unsigned char *parlcd_mem_base) {
     // toggle RST low to reset
-/*
-    digitalWrite(_rst, HIGH);
-    parlcd_delay(50);
-    digitalWrite(_rst, LOW);
-    parlcd_delay(10);
-    digitalWrite(_rst, HIGH);
-    parlcd_delay(10);
-*/
+    /*
+        digitalWrite(_rst, HIGH);
+        parlcd_delay(50);
+        digitalWrite(_rst, LOW);
+        parlcd_delay(10);
+        digitalWrite(_rst, HIGH);
+        parlcd_delay(10);
+     */
     parlcd_write_cmd(parlcd_mem_base, 0x1);
     parlcd_delay(30);
 
 #ifdef HX8357_B
     // Configure HX8357-B display
-        parlcd_write_cmd(parlcd_mem_base, 0x11);
-        parlcd_delay(20);
-        parlcd_write_cmd(parlcd_mem_base, 0xD0);
-        parlcd_write_data(parlcd_mem_base, 0x07);
-        parlcd_write_data(parlcd_mem_base, 0x42);
-        parlcd_write_data(parlcd_mem_base, 0x18);
+    parlcd_write_cmd(parlcd_mem_base, 0x11);
+    parlcd_delay(20);
+    parlcd_write_cmd(parlcd_mem_base, 0xD0);
+    parlcd_write_data(parlcd_mem_base, 0x07);
+    parlcd_write_data(parlcd_mem_base, 0x42);
+    parlcd_write_data(parlcd_mem_base, 0x18);
 
-        parlcd_write_cmd(parlcd_mem_base, 0xD1);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x07);
-        parlcd_write_data(parlcd_mem_base, 0x10);
+    parlcd_write_cmd(parlcd_mem_base, 0xD1);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x07);
+    parlcd_write_data(parlcd_mem_base, 0x10);
 
-        parlcd_write_cmd(parlcd_mem_base, 0xD2);
-        parlcd_write_data(parlcd_mem_base, 0x01);
-        parlcd_write_data(parlcd_mem_base, 0x02);
+    parlcd_write_cmd(parlcd_mem_base, 0xD2);
+    parlcd_write_data(parlcd_mem_base, 0x01);
+    parlcd_write_data(parlcd_mem_base, 0x02);
 
-        parlcd_write_cmd(parlcd_mem_base, 0xC0);
-        parlcd_write_data(parlcd_mem_base, 0x10);
-        parlcd_write_data(parlcd_mem_base, 0x3B);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x02);
-        parlcd_write_data(parlcd_mem_base, 0x11);
+    parlcd_write_cmd(parlcd_mem_base, 0xC0);
+    parlcd_write_data(parlcd_mem_base, 0x10);
+    parlcd_write_data(parlcd_mem_base, 0x3B);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x02);
+    parlcd_write_data(parlcd_mem_base, 0x11);
 
-        parlcd_write_cmd(parlcd_mem_base, 0xC5);
-        parlcd_write_data(parlcd_mem_base, 0x08);
+    parlcd_write_cmd(parlcd_mem_base, 0xC5);
+    parlcd_write_data(parlcd_mem_base, 0x08);
 
-        parlcd_write_cmd(parlcd_mem_base, 0xC8);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x32);
-        parlcd_write_data(parlcd_mem_base, 0x36);
-        parlcd_write_data(parlcd_mem_base, 0x45);
-        parlcd_write_data(parlcd_mem_base, 0x06);
-        parlcd_write_data(parlcd_mem_base, 0x16);
-        parlcd_write_data(parlcd_mem_base, 0x37);
-        parlcd_write_data(parlcd_mem_base, 0x75);
-        parlcd_write_data(parlcd_mem_base, 0x77);
-        parlcd_write_data(parlcd_mem_base, 0x54);
-        parlcd_write_data(parlcd_mem_base, 0x0C);
-        parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_cmd(parlcd_mem_base, 0xC8);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x32);
+    parlcd_write_data(parlcd_mem_base, 0x36);
+    parlcd_write_data(parlcd_mem_base, 0x45);
+    parlcd_write_data(parlcd_mem_base, 0x06);
+    parlcd_write_data(parlcd_mem_base, 0x16);
+    parlcd_write_data(parlcd_mem_base, 0x37);
+    parlcd_write_data(parlcd_mem_base, 0x75);
+    parlcd_write_data(parlcd_mem_base, 0x77);
+    parlcd_write_data(parlcd_mem_base, 0x54);
+    parlcd_write_data(parlcd_mem_base, 0x0C);
+    parlcd_write_data(parlcd_mem_base, 0x00);
 
-        parlcd_write_cmd(parlcd_mem_base, 0x36);
-        parlcd_write_data(parlcd_mem_base, 0x0a);
+    parlcd_write_cmd(parlcd_mem_base, 0x36);
+    parlcd_write_data(parlcd_mem_base, 0x0a);
 
-        parlcd_write_cmd(parlcd_mem_base, 0x3A);
-        parlcd_write_data(parlcd_mem_base, 0x55);
+    parlcd_write_cmd(parlcd_mem_base, 0x3A);
+    parlcd_write_data(parlcd_mem_base, 0x55);
 
-        parlcd_write_cmd(parlcd_mem_base, 0x2A);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x01);
-        parlcd_write_data(parlcd_mem_base, 0x3F);
+    parlcd_write_cmd(parlcd_mem_base, 0x2A);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x01);
+    parlcd_write_data(parlcd_mem_base, 0x3F);
 
-        parlcd_write_cmd(parlcd_mem_base, 0x2B);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x00);
-        parlcd_write_data(parlcd_mem_base, 0x01);
-        parlcd_write_data(parlcd_mem_base, 0xDF);
+    parlcd_write_cmd(parlcd_mem_base, 0x2B);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x00);
+    parlcd_write_data(parlcd_mem_base, 0x01);
+    parlcd_write_data(parlcd_mem_base, 0xDF);
 
-        parlcd_delay(120);
-        parlcd_write_cmd(parlcd_mem_base, 0x29);
+    parlcd_delay(120);
+    parlcd_write_cmd(parlcd_mem_base, 0x29);
 
-        parlcd_delay(25);
+    parlcd_delay(25);
 
 #else
-// HX8357-C display initialisation
+    // HX8357-C display initialisation
 
     parlcd_write_cmd(parlcd_mem_base, 0xB9); // Enable extension command
     parlcd_write_data(parlcd_mem_base, 0xFF);
@@ -333,51 +333,105 @@ int CONNECTDELAY = 2;
 //game values
 int x = 20;
 int y = 20;
-int player_colours[7] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0};
+int player_colours[9] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800};
 int gameworld[HEIGHT][WIDTH];
 int canvas[HEIGHT][WIDTH];
 int gamestatus = 0;
 // ------------
+//variables for server simulation
+int sim_xspawn[8] = {5, 10, 15, 20, 25, 30, 35, 5, 10, 15};
+int sim_yspawn[8] = {5, 10, 15, 20, 25, 5, 10, 25, 25, 25};
 int sim_x[8];
 int sim_y[8];
 int sim_dir[8];
+int sim_alive[8];
+int sim_count_alive;
+//variables for client
+int cli_pid = 0;
+int cli_dir = NORTH;
+
+//sets the game into an innitial condition and initializes variables.
+
+void resetGame() {
+    sim_count_alive = connectedPlayerCount;
+    for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+        sim_x[pid] = sim_xspawn[pid];
+        sim_y[pid] = sim_xspawn[pid];
+        sim_dir[pid] = NORTH;
+        sim_alive[pid] = 1;
+    }
+    //wipe the board
+    for (int x = 1; x < WIDTH - 2; ++x) {
+        for (int y = 1; y < HEIGHT - 2; ++y) {
+            gameworld[y][x] = player_colours[0];
+        }
+    }
+}
 
 void gameLoop(int r, int g, int b, int button, uint32_t dir) {
-    if(server==1) {
+    if (server == 1) {
         //SERVER
-        
+        //pass server players actions as a client would.
+        sim_x[0] = dir;
+        //simulate the game world
+        for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+            //update a single player
+            if (sim_alive[pid]) {
+                //player alive
+                switch (sim_dir[pid]) {
+                    case NORTH:
+                        sim_y[pid]--;
+                        break;
+                    case EAST:
+                        sim_x[pid]++;
+                        break;
+                    case SOUTH:
+                        sim_y[pid]++;
+                        break;
+                    case WEST:
+                        sim_x[pid]--;
+                        break;
+                }
+                if (gameworld[sim_y[pid]][sim_x[pid]] == player_colours[0]) {
+                    //safe ground, paint the tile and do nothing
+                    gameworld[sim_y[pid]][sim_x[pid]] = player_colours[pid + 2];
+                } else {
+                    //collided, reduce player count
+                    sim_alive[pid] = 0;
+                    sim_count_alive -= 1;
+                    if (sim_count_alive <= 1) {
+                        //victory - only one player left alive
+                        //reset game and start over.
+                        resetGame();
+                        return;
+                    }
+                }
+            } else {
+                //dead player
+                continue;
+            }
+        }
     } else {
         //CLIENT
-        
+
+        //receive world information
+        for (int x = 0; x < WIDTH ; ++x) {
+            for (int y = 0; y < HEIGHT ; ++y) {
+                if(x>0 && x < WIDTH-2 && y>0 && y<HEIGHT-2) {
+                    //gameworld[y][x] = received_world[y][x]; //TODO
+                } else {
+                    gameworld[y][x] = player_colours[cli_pid];
+                }
+            }
+        }
+        //TODO broadcast my dir
+                //broadcast( cli_dir );
     }
-    switch (dir) {
-        case NORTH:
-            y--;
-            break;
-        case EAST:
-            x++;
-            break;
-        case SOUTH:
-            y++;
-            break;
-        case WEST:
-            x--;
-            break;
-    }
+
+    //both client and server can leave into menu.
     if (button) {
         gamestatus = 0;
     }
-    if (gameworld[y][x] != player_colours[0]) {
-        for (int i = 0; i < HEIGHT; ++i) {
-            for (int j = 0; j < WIDTH; ++j) {
-                if (gameworld[i][j] == player_colours[2]) gameworld[i][j] = player_colours[0];
-            }
-
-        }
-        x = 20;
-        y = 20;
-    }
-    gameworld[y][x] = player_colours[2];
 }
 
 int servSockFD;
@@ -387,8 +441,8 @@ int connectedPlayerCount = 0;
 
 void *getPlayers(void *arg) {
     connectedPlayerCount = 0;
-    
-//TODO:COMPLETE
+
+    //TODO:COMPLETE
     return NULL;
 }
 
@@ -457,7 +511,7 @@ void createServer() {
     int broadcast = 1;
 
     if (setsockopt(servSockFD, SOL_SOCKET, SO_BROADCAST, &broadcast,
-                   sizeof broadcast) == -1) {
+            sizeof broadcast) == -1) {
         perror("setsockopt (SO_BROADCAST)");
         exit(1);
     }
@@ -596,11 +650,11 @@ int main(int argc, char *argv[]) {
         struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 200 * 1000 * 1000};
 
         /**(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0001;
-        *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0002;
-        *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0004;
-        *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0008;
-        *(volatile uint32_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0010;
-        *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0020;*/
+         *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0002;
+         *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0004;
+         *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0008;
+         *(volatile uint32_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0010;
+         *(volatile uint16_t*)(parlcd_mem_base + PARLCD_REG_DATA_o) = 0x0020;*/
         rgb_knobs_value = *(volatile uint32_t *) (mem_base + SPILED_REG_KNOBS_8BIT_o);
         int b = (rgb_knobs_value) & 0xFF;
         int g = (rgb_knobs_value >> 8) & 0xFF;
