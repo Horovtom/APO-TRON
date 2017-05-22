@@ -2,6 +2,20 @@
 #include<stdlib.h>
 #include<string.h>
 
+int char_server[55] =
+{0,1,1,0,0,1,1,0,1,1,0,
+ 1,0,0,0,1,0,0,0,1,0,1,
+ 0,1,0,0,1,1,0,0,1,0,1,
+ 0,0,1,0,1,0,0,0,1,1,0,
+ 1,1,0,0,0,1,1,0,1,0,1};
+
+int char_client[55] =
+{0,1,1,0,1,0,0,0,1,1,1,
+ 1,0,0,0,1,0,0,0,0,1,0,
+ 1,0,0,0,1,0,0,0,0,1,0,
+ 1,0,0,0,1,0,0,0,0,1,0,
+ 0,1,1,0,0,1,1,0,1,1,1};
+
 int char_zero[15] ={1,1,1,
                     1,0,1,
                     1,0,1,
@@ -106,6 +120,14 @@ int maskText(char * text, int textx, int texty, int cursorx, int cursory) {
         int letter = (cursorx - textx)/4;
         int inlettery = (cursory - texty)%5;
         return charToMask(text[letter])[inlettery*3+inletterx];
+    }
+    return 0;
+}
+
+/*1 if mask, 0 if not*/
+int maskPixels(int * pixelart, int textx, int texty, int rowlen, int collen, int cursorx, int cursory) {
+    if(cursorx >= textx && cursorx < textx+rowlen && cursory >= texty && cursory < texty+collen) {
+        return pixelart[(cursorx-textx)*rowlen+(cursorx-textx)];
     }
     return 0;
 }

@@ -344,8 +344,19 @@ int player_colours[7] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0}
 int gameworld[HEIGHT][WIDTH];
 int canvas[HEIGHT][WIDTH];
 int gamestatus = 0;
+// ------------
+int sim_x[8];
+int sim_y[8];
+int sim_dir[8];
 
 void gameLoop(int r, int g, int b, int button, uint32_t dir) {
+    if(server==1) {
+        //SERVER
+        
+    } else {
+        //CLIENT
+        
+    }
     switch (dir) {
         case NORTH:
             y--;

@@ -1,4 +1,5 @@
 .idea/*
+nbproject/*
 mzapo_lcdtest
 mzapo_lcdtest.o
 .xml
