@@ -389,8 +389,10 @@ void *getPlayers(void *arg) {
     return NULL;
 }
 
+/**
+ * Listener for broadcast
+ */
 void createListener() {
-
     if ((listenSocketFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         perror("socket");
         exit(1);
@@ -415,11 +417,13 @@ void createListener() {
         perror("bind");
         exit(1);
     }
-//    char buf[256];
-//
-//    struct sockaddr_in sender;
-//    socklen_t length = sizeof(sender);
-//    recvfrom(listenSocketFD, &buf, sizeof(buf), 0, (struct sockaddr *) &sender, &length);
+
+
+    char buf[256];
+
+    struct sockaddr_in sender;
+    socklen_t length = sizeof(sender);
+    recvfrom(listenSocketFD, &buf, sizeof(buf), 0, (struct sockaddr *) &sender, &length);
 }
 
 void createServer() {
@@ -497,9 +501,11 @@ unsigned char *parlcd_mem_base;
 
 void logicLoop(int r, int g, int b, int button, uint32_t dir) {
     if (gamestatus == 1) {
+        //We are in game
         gameLoop(r, g, b, button, dir);
         writeToLCD(player_colours, gameworld, parlcd_mem_base);
     } else {
+        //We are in menu
         menuLoop(r, g, b, button, dir);
         writeToLCD(player_colours, canvas, parlcd_mem_base);
     }
