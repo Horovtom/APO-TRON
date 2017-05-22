@@ -27,17 +27,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <memory.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <time.h>
-#include <string.h>
-#include <stdio.h>
 
-#include <unistd.h>
-#include <strings.h>
+#include <sys/time.h>
+
+#include <arpa/inet.h>
+
 #include <pthread.h>
 #include "writing.c"
 
@@ -380,7 +374,6 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
     gameworld[y][x] = player_colours[2];
 }
 
-int servSockFD;
 int listenSocketFD;
 pthread_t workerThread;
 int connectedPlayerCount = 0;
@@ -392,83 +385,114 @@ void *getPlayers(void *arg) {
     return NULL;
 }
 
-/**
- * Listener for broadcast
- * Hopefully this works
- */
-void createListener() {
-    if ((listenSocketFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-        perror("socket");
-        exit(1);
-    }
+void createSender(int port, struct sockaddr_in *sockaddr, int *fd);
 
-    struct sockaddr_in bindaddr;
-
-    memset(&bindaddr, 0, sizeof(bindaddr));
-    bindaddr.sin_family = AF_INET;
-    bindaddr.sin_port = htons(CLIENT_PORT);
-    bindaddr.sin_addr.s_addr = INADDR_ANY;
-
-    int yes = 1;
-
-    if (setsockopt(listenSocketFD, SOL_SOCKET, SO_REUSEADDR, &yes,
-                   sizeof(yes)) == -1) {
-        perror("setsockopt (SO_REUSEADDR)");
-        exit(1);
-    }
-
-    if (bind(listenSocketFD, (struct sockaddr *) &bindaddr, sizeof(bindaddr)) == -1) {
-        perror("bind");
-        exit(1);
-    }
-
-    char buf[256];
-
-    struct sockaddr_in sender;
-    socklen_t length = sizeof(sender);
-    recvfrom(listenSocketFD, &buf, sizeof(buf), 0, (struct sockaddr *) &sender, &length);
-}
-
-struct sockaddr_in serverSockAddr;
+struct sockaddr_in servSenderSockaddr;
+struct sockaddr_in cliSenderSockaddr;
+int cliSenderFD;
+int servSenderFD;
 
 /**
  * Creates broadcast server
  */
-void createServer() {
-    if ((servSockFD = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+void createServerSender() {
+    createSender(SERVER_PORT, &servSenderSockaddr, &servSenderFD);
+}
+
+/**
+ * Creates sender socket for the client
+ */
+void createClientSender() {
+    createSender(CLIENT_PORT, &cliSenderSockaddr, &cliSenderFD);
+}
+
+void createSender(int port, struct sockaddr_in *sockaddr, int *fd) {
+    if ((*fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
         perror("socket");
         exit(1);
     }
 
 
-    memset(&serverSockAddr, 0, sizeof(serverSockAddr));
-    serverSockAddr.sin_family = AF_INET;
-    serverSockAddr.sin_port = htons(SERVER_PORT);
-    serverSockAddr.sin_addr.s_addr = INADDR_BROADCAST;
+    memset(&sockaddr, 0, sizeof(sockaddr));
+    sockaddr->sin_family = AF_INET;
+    sockaddr->sin_port = htons((uint16_t) port);
+    sockaddr->sin_addr.s_addr = INADDR_BROADCAST;
 
-    int yes = 1;
+    int reuse = 1;
 
-    if (setsockopt(servSockFD, SOL_SOCKET, SO_REUSEADDR, &yes,
-                   sizeof(yes)) == -1) {
+    if (setsockopt(*fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
+                   sizeof(reuse)) == -1) {
         perror("setsockopt (SO_REUSEADDR)");
         exit(1);
     }
 
     int broadcast = 1;
-
-    if (setsockopt(servSockFD, SOL_SOCKET, SO_BROADCAST, &broadcast,
+    if (setsockopt(*fd, SOL_SOCKET, SO_BROADCAST, &broadcast,
                    sizeof broadcast) == -1) {
         perror("setsockopt (SO_BROADCAST)");
         exit(1);
     }
+}
 
-    char buf[] = "Here is the game!";
-    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &serverSockAddr, sizeof(serverSockAddr));
+struct sockaddr_in servListenerSockaddr;
+struct sockaddr_in cliListenerSockaddr;
+int servListenerFD;
+int cliListenerFD;
+
+void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
+
+void createServerListener() {
+    createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
+}
+
+void createClientListener() {
+    createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
+}
+
+void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
+    *fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (*fd <= 0) {
+        perror("socket() failed.");
+        return;
+    }
+
+    // set timeout to 2 seconds.
+    struct timeval timeV;
+    timeV.tv_sec = 0;
+    timeV.tv_usec = 200000;
+
+    if (setsockopt(*fd, SOL_SOCKET, SO_RCVTIMEO, &timeV, sizeof(timeV)) == -1) {
+        perror("setsockopt failed");
+        close(*fd);
+        exit(1);
+    }
+
+    // bind the port
+    memset(&sockaddr, 0, sizeof(sockaddr));
+
+    sockaddr->sin_family = AF_INET;
+    sockaddr->sin_port = htons((uint16_t) port);
+    sockaddr->sin_addr.s_addr = htonl(INADDR_ANY);
+
+    int status = bind(*fd, (struct sockaddr *) &sockaddr, sizeof(sockaddr));
+    if (status == -1) {
+        close(*fd);
+        perror("bind() failed.");
+        exit(1);
+    }
+
+//    struct sockaddr_in receiveSockaddr;
+//    socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
+//
+//    size_t bufSize = 16384;
+//    void *buf = malloc(bufSize);
+//    ssize_t result = recvfrom(fd, buf, bufSize, 0, (struct sockaddr *)&receiveSockaddr, &receiveSockaddrLen);
+
 }
 
 int lastServer;
 
-void serverSendPing();
+void serverSendPTable();
 
 char* getPlayerIDs() ;
 
@@ -480,10 +504,10 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             //SERVER MODE!
             server = 1;
             if(lastServer==0) {
-                createServer();
+                createServerSender();
             }
 
-            serverSendPing();
+            serverSendPTable();
             //Show graphic for being in server mode
             col = player_colours[1];
             //Starting game by button
@@ -513,17 +537,32 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     }
 }
 
+
 /**
  * Broadcasts ip table of players
  */
-void serverSendPing() {
+void serverSendPTable() {
     char buf[128] = "Game: ";
     strcat(buf, getPlayerIDs());
-    sendto(servSockFD, buf, sizeof(buf), 0, (const struct sockaddr *) &serverSockAddr, sizeof(serverSockAddr));
 }
 
-char* getPlayerIDs() {
+/**
+ * Sends message from the server socket
+ */
+void serverSend(char *buf) {
+    sendto(servSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &servSenderSockaddr,
+           sizeof(servSenderSockaddr));
+}
 
+/**
+ * Sends message from the client socket
+ */
+void clientSend(char *buf) {
+    sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
+}
+
+char *getPlayerIDs() {
+    //TODO: COMPLETE THIS
     return "";
 }
 
