@@ -13,8 +13,6 @@
  *******************************************************************/
 
 
-
-//http://www.binarytides.com/programming-udp-sockets-c-linux/
 #define _POSIX_C_SOURCE 200112L
 
 #include <sys/mman.h>
@@ -60,6 +58,13 @@ char *memdev = "/dev/mem";
 #define CLIENT_PORT 12345
 #define BROADCAST_ADDRESS "192.168.202.184"
 
+
+//--------DISPLAY-----------------------------------
+//region variables
+unsigned char *parlcd_mem_base;
+
+//endregion
+//region functions
 void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
     unsigned long mem_window_size;
     unsigned long pagesize;
@@ -294,38 +299,6 @@ void parlcd_hx8357_init(unsigned char *parlcd_mem_base) {
 #endif
 }
 
-//NETWORKING
-//are we connected to another player
-int netstatus = 0;
-//are we a server?
-int server = 0;
-int connectCounter = 0;
-int CONNECTDELAY = 2;
-
-
-
-// ------------
-//game values
-int x = 20;
-int y = 20;
-int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800};
-char gameworld[HEIGHT][WIDTH];
-char canvas[HEIGHT][WIDTH];
-int gamestatus = 0;
-// ------------
-//variables for server simulation
-int sim_xspawn[8] = {5, 10, 15, 20, 25, 30, 35, 5};
-int sim_yspawn[8] = {5, 10, 15, 20, 25, 5, 10, 25};
-int sim_x[8];
-int sim_y[8];
-char sim_dir[8];
-int sim_alive[8];
-int sim_count_alive;
-//variables for client
-char cli_pid = 0;
-char cli_dir = NORTH;
-int connectedPlayerCount = 0;
-
 void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_mem_base) {
     parlcd_write_cmd(parlcd_mem_base, 0x2c);
     for (int i = 0; i < 320; i++) {
@@ -340,182 +313,101 @@ void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_m
     }
 
 }
+//endregion
 
 
-//sets the game into an innitial condition and initializes variables.
+//--------NETWORKING---------------------------------------------
+//region variables
+//are we connected to another player
+int netstatus = 0;
+/**
+ * are we a server?
+ */
+int server = 0;
+/**
+ * Used to determine the last state of {@link #server}
+ */
+int lastServer;
+int connectCounter = 0;
+int CONNECTDELAY = 2;
+//region sender
+struct sockaddr_in servSenderSockaddr;
+struct sockaddr_in cliSenderSockaddr;
+int cliSenderFD;
+int servSenderFD;
+//endregion
+//region receiver
+struct sockaddr_in servListenerSockaddr;
+struct sockaddr_in cliListenerSockaddr;
+int servListenerFD;
+int cliListenerFD;
+//endregion
+int connectedPlayerCount = 0;
+//endregion
 
-void resetGame() {
-    sim_count_alive = connectedPlayerCount;
-    for (int pid = 0; pid < connectedPlayerCount; ++pid) {
-        sim_x[pid] = sim_xspawn[pid];
-        sim_y[pid] = sim_yspawn[pid];
-        sim_dir[pid] = NORTH;
-        sim_alive[pid] = 1;
-    }
-    //wipe the board
-    for (int x = 1; x < WIDTH - 2; ++x) {
-        for (int y = 1; y < HEIGHT - 2; ++y) {
-            gameworld[y][x] = 0;
-        }
-    }
-}
+//region functions
+//region senders
+/**
+* Used to create sender for anybody who wants it: 
+ * Used by {@link #createClientSender()}
+ * Used by {@link #createServerSender()}
+ */
+void createSender(int port, struct sockaddr_in *sockaddr, int *fd);
+
+/**
+ * Creates sender socket for the client
+ */
+void createClientSender();
+
+/**
+ * Creates broadcast server
+ */
+void createServerSender();
 
 /**
  * Sends message from the client socket
  */
 void clientSend(char *buf);
 
-void sendMap();
-
-void gameLoop(int r, int g, int b, int button, uint32_t dir) {
-    if (server == 1) {
-        //SERVER
-        //pass server players actions as a client would.
-        sim_dir[0] = (char) dir;
-        //simulate the game world
-        for (int pid = 0; pid < connectedPlayerCount; ++pid) {
-            //update a single player
-            if (sim_alive[pid]) {
-                //player alive
-                switch (sim_dir[pid]) {
-                    case NORTH:
-                        sim_y[pid]--;
-                        break;
-                    case EAST:
-                        sim_x[pid]++;
-                        break;
-                    case SOUTH:
-                        sim_y[pid]++;
-                        break;
-                    case WEST:
-                        sim_x[pid]--;
-                        break;
-                }
-                if (gameworld[sim_y[pid]][sim_x[pid]] == 0) {
-                    //safe ground, paint the tile and do nothing
-                    gameworld[sim_y[pid]][sim_x[pid]] = (char) (pid + 2);
-                } else {
-                    //collided, reduce player count
-                    sim_alive[pid] = 0;
-                    sim_count_alive -= 1;
-                    if (sim_count_alive <= 1) {
-                        //victory - only one player left alive
-                        //reset game and start over.
-                        resetGame();
-                        return;
-                    }
-                }
-            } else {
-                //dead player
-                continue;
-            }
-        }
-        //send map
-        sendMap();
-    } else {
-        //CLIENT
-
-        //receive world information
-        for (int x = 0; x < WIDTH ; ++x) {
-            for (int y = 0; y < HEIGHT ; ++y) {
-                if(x>0 && x < WIDTH-2 && y>0 && y<HEIGHT-2) {
-                    //gameworld[y][x] = received_world[y][x]; //TODO
-                } else {
-                    gameworld[y][x] = cli_pid;
-                }
-            }
-        }
-        //broadcast my dir
-        char msg[2];
-        sprintf(msg, "%d%d", cli_pid, cli_dir);
-        clientSend(msg);
-    }
-
-    //both client and server can leave into menu.
-    if (button) {
-        gamestatus = 0;
-    }
-}
-
 /**
  * Sends message from the server socket
  */
 void serverSend(char *buf);
 
-void sendMap() {
-    char msg[WIDTH * HEIGHT];
-    for (int x = 0; x < WIDTH; ++x) {
-        for (int y = 0; y < HEIGHT; ++y) {
-            msg[(x + y * WIDTH)] = (gameworld[y][x]);
-        }
-    }
-    serverSend(msg);
-}
-
-
-void createSender(int port, struct sockaddr_in *sockaddr, int *fd);
-
-struct sockaddr_in servSenderSockaddr;
-struct sockaddr_in cliSenderSockaddr;
-int cliSenderFD;
-int servSenderFD;
+/**
+ * Uses {@link #serverSend} to send stuff from server send socket
+ */
+void sendMap();
 
 /**
- * Creates broadcast server
+ * Broadcasts player table to the network. Used in server mode to notify clients that they are connected.
  */
-void createServerSender() {
-    createSender(SERVER_PORT, &servSenderSockaddr, &servSenderFD);
-}
+void serverSendPTable();
+//endregion
+
+//region receivers
 
 /**
- * Creates sender socket for the client
+ * Creates Listener socket for the server
  */
-void createClientSender() {
-    createSender(CLIENT_PORT, &cliSenderSockaddr, &cliSenderFD);
-}
+void createServerListener();
 
-void createSender(int port, struct sockaddr_in *sockaddr, int *fd) {
-    if ((*fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-        perror("socket");
-        exit(1);
-    }
+/**
+ * Creates Listener socket for the client
+ */
+void createClientListener();
 
-
-    memset(&sockaddr, 0, sizeof(sockaddr));
-    sockaddr->sin_family = AF_INET;
-    sockaddr->sin_port = htons((uint16_t) port);
-    sockaddr->sin_addr.s_addr = INADDR_BROADCAST;
-
-    int reuse = 1;
-
-    if (setsockopt(*fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
-                   sizeof(reuse)) == -1) {
-        perror("setsockopt (SO_REUSEADDR)");
-        exit(1);
-    }
-
-    int broadcast = 1;
-    if (setsockopt(*fd, SOL_SOCKET, SO_BROADCAST, &broadcast,
-                   sizeof broadcast) == -1) {
-        perror("setsockopt (SO_BROADCAST)");
-        exit(1);
-    }
-}
-
-struct sockaddr_in servListenerSockaddr;
-struct sockaddr_in cliListenerSockaddr;
-int servListenerFD;
-int cliListenerFD;
-
+/**
+ * Used to create listener for anybody who wants it: 
+ * Used by {@link #createClientListener()}
+ * Used by {@link #createServerListener()}
+ */
 void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
 
-void createServerListener() {
-    createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
-}
+//endregion
+//endregion
 
-void createClientListener() {
-    createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
-}
+//---------IMPLEMENTATION OF NETWORKING---------------------------
 
 void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
     *fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -558,11 +450,233 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
 
 }
 
-int lastServer;
+void createClientListener() {
+    createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
+}
 
-void serverSendPTable();
+void createServerListener() {
+    createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
+}
 
-char* getPlayerIDs() ;
+void createSender(int port, struct sockaddr_in *sockaddr, int *fd) {
+    if ((*fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+    }
+    memset(&sockaddr, 0, sizeof(sockaddr));
+    sockaddr->sin_family = AF_INET;
+    sockaddr->sin_port = htons((uint16_t) port);
+    sockaddr->sin_addr.s_addr = INADDR_BROADCAST;
+
+    int reuse = 1;
+
+    if (setsockopt(*fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
+                   sizeof(reuse)) == -1) {
+        perror("setsockopt (SO_REUSEADDR)");
+        exit(1);
+    }
+
+    int broadcast = 1;
+    if (setsockopt(*fd, SOL_SOCKET, SO_BROADCAST, &broadcast,
+                   sizeof broadcast) == -1) {
+        perror("setsockopt (SO_BROADCAST)");
+        exit(1);
+    }
+}
+
+void createClientSender() {
+    createSender(CLIENT_PORT, &cliSenderSockaddr, &cliSenderFD);
+}
+
+void sendMap() {
+	
+    char msg[WIDTH * HEIGHT];
+    for (int x = 0; x < WIDTH; ++x) {
+        for (int y = 0; y < HEIGHT; ++y) {
+            msg[(x + y * WIDTH)] = (gameworld[y][x]);
+        }
+    }
+    serverSend(msg);
+}
+
+void createServerSender() {
+    createSender(SERVER_PORT, &servSenderSockaddr, &servSenderFD);
+}
+
+void serverSendPTable() {
+    char buf[128] = "Game: ";
+    strcat(buf, getPlayerIDs());
+}
+
+void serverSend(char *buf) {
+    sendto(servSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &servSenderSockaddr,
+           sizeof(servSenderSockaddr));
+}
+
+void clientSend(char *buf) {
+    sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
+}
+
+
+// ------------GAME------------------------------------------------
+//region variables
+//region game values
+int x = 20;
+int y = 20;
+int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800};
+char gameworld[HEIGHT][WIDTH];
+char canvas[HEIGHT][WIDTH];
+int gamestatus = 0;
+//endregion
+
+//region variables for server simulation
+int sim_xspawn[8] = {5, 10, 15, 20, 25, 30, 35, 5};
+int sim_yspawn[8] = {5, 10, 15, 20, 25, 5, 10, 25};
+int sim_x[8];
+int sim_y[8];
+char sim_dir[8];
+int sim_alive[8];
+int sim_count_alive;
+//endregion
+
+//region variables for client
+char cli_pid = 0;
+char cli_dir = NORTH;
+//endregion
+
+//region functions
+/**
+ * sets the game into an initial condition and initializes variables.
+ */
+void resetGame();
+
+/**
+ * Loop with ingame logic.
+ */
+void gameLoop(int r, int g, int b, int button, uint32_t dir);
+
+/**
+ * Loop logic and drawing in menu
+ */
+void menuLoop(int r, int g, int b, int button, uint32_t dir);
+
+/**
+ * This function forwards program to current state
+ * Forwards to either 	{@link #gameLoop(int, int, int, int, uint32_t)}
+ * 				or		{@link #menuLoop(int, int, int, int, uint32_t)}
+ */
+void logicLoop(int r, int g, int b, int button, uint32_t dir)
+
+/**
+ * Game loop for the server
+ * Called by: {@link #gameLoop(int, int, int, int, uint32_t)}
+ */
+void serverLoop(int r, int g, int b, int button, uint32_t dir);
+
+/**
+ * Game loop for the client
+ * Called by: {@link #gameLoop(int, int, int, int, uint32_t)}
+ */
+void clientLoop(int r, int g, int b, int button, uint32_t dir);
+//endregion
+//endregion
+
+
+//----------IMPLEMENTATION OF GAME---------------------------------
+
+void serverLoop(int r, int g, int b, int button, uint32_t dir) {
+	//SERVER
+        //pass server players actions as a client would.
+        sim_dir[0] = (char) dir;
+        //simulate the game world
+        for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+            //update a single player
+            if (sim_alive[pid]) {
+                //player alive
+                switch (sim_dir[pid]) {
+                    case NORTH:
+                        sim_y[pid]--;
+                        break;
+                    case EAST:
+                        sim_x[pid]++;
+                        break;
+                    case SOUTH:
+                        sim_y[pid]++;
+                        break;
+                    case WEST:
+                        sim_x[pid]--;
+                        break;
+                }
+                if (gameworld[sim_y[pid]][sim_x[pid]] == 0) {
+                    //safe ground, paint the tile and do nothing
+                    gameworld[sim_y[pid]][sim_x[pid]] = (char) (pid + 2);
+                } else {
+                    //collided, reduce player count
+                    sim_alive[pid] = 0;
+                    sim_count_alive -= 1;
+                    if (sim_count_alive <= 1) {
+                        //victory - only one player left alive
+                        //reset game and start over.
+                        resetGame();
+                        return;
+                    }
+                }
+            } else {
+                //dead player
+                continue;
+            }
+        }
+        //send map
+        sendMap();
+}
+
+void clientLoop(int r, int g, int b, int button, uint32_t dir) {
+	//CLIENT
+
+        //receive world information
+        for (int x = 0; x < WIDTH ; ++x) {
+            for (int y = 0; y < HEIGHT ; ++y) {
+                if(x>0 && x < WIDTH-2 && y>0 && y<HEIGHT-2) {
+                    //gameworld[y][x] = received_world[y][x]; //TODO
+                } else {
+                    gameworld[y][x] = cli_pid;
+                }
+            }
+        }
+        //broadcast my dir
+        char msg[2];
+        sprintf(msg, "%d%d", cli_pid, cli_dir);
+        clientSend(msg);
+}
+
+void resetGame() {
+    sim_count_alive = connectedPlayerCount;
+    for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+        sim_x[pid] = sim_xspawn[pid];
+        sim_y[pid] = sim_yspawn[pid];
+        sim_dir[pid] = NORTH;
+        sim_alive[pid] = 1;
+    }
+    //wipe the board
+    for (int x = 1; x < WIDTH - 2; ++x) {
+        for (int y = 1; y < HEIGHT - 2; ++y) {
+            gameworld[y][x] = 0;
+        }
+    }
+}
+
+void gameLoop(int r, int g, int b, int button, uint32_t dir) {
+    if (server == 1) {
+        serverLoop(r, g, b, button, dir);
+    } else {
+        clientLoop(r, g, b, button, dir);
+    }
+
+    //both client and server can leave into menu.
+    if (button) {
+        gamestatus = 0;
+    }
+}
 
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     char col;
@@ -610,37 +724,6 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
 
     }
 }
-
-
-/**
- * Broadcasts ip table of players
- */
-void serverSendPTable() {
-    char buf[128] = "Game: ";
-    strcat(buf, getPlayerIDs());
-}
-
-/**
- * Sends message from the server socket
- */
-void serverSend(char *buf) {
-    sendto(servSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &servSenderSockaddr,
-           sizeof(servSenderSockaddr));
-}
-
-/**
- * Sends message from the client socket
- */
-void clientSend(char *buf) {
-    sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
-}
-
-char *getPlayerIDs() {
-    //TODO: COMPLETE THIS
-    return "";
-}
-
-unsigned char *parlcd_mem_base;
 
 void logicLoop(int r, int g, int b, int button, uint32_t dir) {
     if (gamestatus == 1) {
