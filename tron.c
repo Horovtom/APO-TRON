@@ -343,6 +343,10 @@ int servListenerFD;
 int cliListenerFD;
 //endregion
 int connectedPlayerCount = 0;
+//region recieved info
+char recieved_gameworld[HEIGHT][WIDTH];
+char recieved_sim_dir[8];
+//endregion
 //endregion
 
 //region functions
@@ -403,6 +407,27 @@ void createClientListener();
  * Used by {@link #createServerListener()}
  */
 void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
+
+/*
+ * Listen for message
+ */
+ssize_t listen(char* buf, int length, int fd);
+
+/*
+ * Client's function for listen thread
+ * usage:
+ * pthread_t td;
+ * pthread_create(&td, NULL, clientListen, NULL);
+ */
+void* clientListen(void* args);
+
+/*
+ * Server's function for listen thread
+ * usage:
+ * pthread_t td;
+ * pthread_create(&td, NULL, serverListen, NULL);
+ */
+void* serverListen(void* args);
 
 //endregion
 //endregion
@@ -491,9 +516,9 @@ void createClientSender() {
 void sendMap() {
 	
     char msg[WIDTH * HEIGHT];
-    for (int x = 0; x < WIDTH; ++x) {
-        for (int y = 0; y < HEIGHT; ++y) {
-            msg[(x + y * WIDTH)] = (gameworld[y][x]);
+    for (int i = 0; i < HEIGHT; i++) {
+        for (int j = 0; j < WIDTH; j++) {
+            msg[(j + i*WIDTH)] = (gameworld[i][j]);
         }
     }
     serverSend(msg);
@@ -515,6 +540,37 @@ void serverSend(char *buf) {
 
 void clientSend(char *buf) {
     sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
+}
+
+ssize_t listen(char* buf, int length, int fd){
+	struct sockaddr_in receiveSockaddr;
+	socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
+	ssize_t result = recvfrom(fd, buf, length, 0, (struct sockaddr *)&receiveSockaddr, &receiveSockaddrLen);
+	return result;
+}
+
+void* clientListen(void* args){
+	char msg[HEIGHT*WIDTH];
+	while(1){
+		if(listen(msg, HEIGHT*WIDTH, cliListenerFD) > 0){
+			for (int i = 0; i<HEIGHT*WIDTH; i++){
+				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
+			}
+		}
+		struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
+		clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
+	}
+}
+
+void* serverListen(void* args){
+	char msg[2];
+	while(1){
+		if(listen(msg, 2, servListenerFD) > 0){
+			recieved_sim_dir[msg[0]] = msg[1];
+		}
+		//struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
+		//clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
+	}
 }
 
 
@@ -655,6 +711,7 @@ void resetGame() {
         sim_x[pid] = sim_xspawn[pid];
         sim_y[pid] = sim_yspawn[pid];
         sim_dir[pid] = NORTH;
+	recieved_sim_dir[pid] = NORTH;
         sim_alive[pid] = 1;
     }
     //wipe the board
@@ -749,8 +806,13 @@ int main(int argc, char *argv[]) {
     int i, j;
     for (i = 0; i < HEIGHT; ++i) {
         for (j = 0; j < WIDTH; ++j) {
-            if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) gameworld[i][j] = 1;
-            else gameworld[i][j] = 0;
+            if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) {
+	    	gameworld[i][j] = 1;
+		recieved_gameworld[i][j] = 1;
+            } else {
+	    	gameworld[i][j] = 0;
+		recieved_gameworld[i][j] = 0;
+	    }
         }
 
     }
