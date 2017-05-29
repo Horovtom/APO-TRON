@@ -770,6 +770,12 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                 createClientSender();
             }
             col = 0;
+	    if (button) {
+                //col = 3;
+                gamestatus = 1;
+		pthread_t td;
+		pthread_create(&td, NULL, clientListen, NULL);
+            }
             break;
     }
     lastServer = server;
