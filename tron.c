@@ -345,7 +345,6 @@ int cliListenerFD;
 int connectedPlayerCount = 0;
 //region recieved info
 char recieved_gameworld[HEIGHT][WIDTH];
-char recieved_sim_dir[8];
 //endregion
 //endregion
 
@@ -552,7 +551,7 @@ ssize_t listen(char* buf, int length, int fd){
 void* clientListen(void* args){
 	char msg[HEIGHT*WIDTH];
 	while(1){
-		if(listen(msg, HEIGHT*WIDTH, cliListenerFD) > 0){
+		if(listen(msg, HEIGHT*WIDTH, cliListenerFD) > (HEIGHT*WIDTH)-2){
 			for (int i = 0; i<HEIGHT*WIDTH; i++){
 				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
 			}
@@ -563,10 +562,11 @@ void* clientListen(void* args){
 }
 
 void* serverListen(void* args){
-	char msg[2];
+	char msg[HEIGHT*WIDTH];
+	int l;
 	while(1){
-		if(listen(msg, 2, servListenerFD) > 0){
-			recieved_sim_dir[msg[0]] = msg[1];
+		if((l = listen(msg, HEIGHT*WIDTH, servListenerFD)) > 0 && l < 4){
+			sim_dir[msg[0]] = msg[1];
 		}
 		//struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
 		//clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
@@ -693,7 +693,7 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
         for (int x = 0; x < WIDTH ; ++x) {
             for (int y = 0; y < HEIGHT ; ++y) {
                 if(x>0 && x < WIDTH-2 && y>0 && y<HEIGHT-2) {
-                    //gameworld[y][x] = received_world[y][x]; //TODO
+                    gameworld[y][x] = recieved_gameworld[y][x]; //TODO
                 } else {
                     gameworld[y][x] = cli_pid;
                 }
@@ -711,7 +711,6 @@ void resetGame() {
         sim_x[pid] = sim_xspawn[pid];
         sim_y[pid] = sim_yspawn[pid];
         sim_dir[pid] = NORTH;
-	recieved_sim_dir[pid] = NORTH;
         sim_alive[pid] = 1;
     }
     //wipe the board
