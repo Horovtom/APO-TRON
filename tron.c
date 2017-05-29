@@ -27,6 +27,7 @@
 #include <memory.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <pthread.h>
 #include "writing.c"
 
 char *memdev = "/dev/mem";
@@ -62,6 +63,8 @@ char *memdev = "/dev/mem";
 //--------DISPLAY-----------------------------------
 //region variables
 unsigned char *parlcd_mem_base;
+int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800};
+
 
 //endregion
 //region functions
@@ -380,12 +383,12 @@ void serverSend(char *buf);
 /**
  * Uses {@link #serverSend} to send stuff from server send socket
  */
-void sendMap();
+void sendMap(char gameworld[HEIGHT][WIDTH]);
 
 /**
  * Broadcasts player table to the network. Used in server mode to notify clients that they are connected.
  */
-void serverSendPTable();
+void serverSendPTable(char *playerIDs);
 //endregion
 
 //region receivers
@@ -410,7 +413,7 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
 /*
  * Listen for message
  */
-ssize_t listen(char* buf, int length, int fd);
+ssize_t listen_message(char *buf, int length, int fd);
 
 /*
  * Client's function for listen thread
@@ -512,7 +515,7 @@ void createClientSender() {
     createSender(CLIENT_PORT, &cliSenderSockaddr, &cliSenderFD);
 }
 
-void sendMap() {
+void sendMap(char gameworld[HEIGHT][WIDTH]) {
 	
     char msg[WIDTH * HEIGHT];
     for (int i = 0; i < HEIGHT; i++) {
@@ -527,9 +530,9 @@ void createServerSender() {
     createSender(SERVER_PORT, &servSenderSockaddr, &servSenderFD);
 }
 
-void serverSendPTable() {
+void serverSendPTable(char *playerIDs) {
     char buf[128] = "Game: ";
-    strcat(buf, getPlayerIDs());
+    strcat(buf, playerIDs);
 }
 
 void serverSend(char *buf) {
@@ -541,17 +544,17 @@ void clientSend(char *buf) {
     sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
-ssize_t listen(char* buf, int length, int fd){
+ssize_t listen_message(char *buf, int length, int fd) {
 	struct sockaddr_in receiveSockaddr;
 	socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
-	ssize_t result = recvfrom(fd, buf, length, 0, (struct sockaddr *)&receiveSockaddr, &receiveSockaddrLen);
+    ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
 	return result;
 }
 
 void* clientListen(void* args){
 	char msg[HEIGHT*WIDTH];
 	while(1){
-		if(listen(msg, HEIGHT*WIDTH, cliListenerFD) > (HEIGHT*WIDTH)-2){
+        if (listen_message(msg, HEIGHT * WIDTH, cliListenerFD) > (HEIGHT * WIDTH) - 2) {
 			for (int i = 0; i<HEIGHT*WIDTH; i++){
 				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
 			}
@@ -561,25 +564,10 @@ void* clientListen(void* args){
 	}
 }
 
-void* serverListen(void* args){
-	char msg[HEIGHT*WIDTH];
-	int l;
-	while(1){
-		if((l = listen(msg, HEIGHT*WIDTH, servListenerFD)) > 0 && l < 4){
-			sim_dir[msg[0]] = msg[1];
-		}
-		//struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
-		//clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
-	}
-}
-
 
 // ------------GAME------------------------------------------------
 //region variables
 //region game values
-int x = 20;
-int y = 20;
-int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800};
 char gameworld[HEIGHT][WIDTH];
 char canvas[HEIGHT][WIDTH];
 int gamestatus = 0;
@@ -621,7 +609,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir);
  * Forwards to either 	{@link #gameLoop(int, int, int, int, uint32_t)}
  * 				or		{@link #menuLoop(int, int, int, int, uint32_t)}
  */
-void logicLoop(int r, int g, int b, int button, uint32_t dir)
+void logicLoop(int r, int g, int b, int button, uint32_t dir);
 
 /**
  * Game loop for the server
@@ -634,11 +622,29 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir);
  * Called by: {@link #gameLoop(int, int, int, int, uint32_t)}
  */
 void clientLoop(int r, int g, int b, int button, uint32_t dir);
+
+/**
+ * Gets table of players, used by the server
+ * @return
+ */
+char *getPlayerIDTable();
 //endregion
 //endregion
 
 
 //----------IMPLEMENTATION OF GAME---------------------------------
+
+void *serverListen(void *args) {
+    char msg[HEIGHT * WIDTH];
+    int l;
+    while (1) {
+        if ((l = (int) listen_message(msg, HEIGHT * WIDTH, servListenerFD)) > 0 && l < 4) {
+            sim_dir[msg[0]] = msg[1];
+        }
+        //struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
+        //clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
+    }
+}
 
 void serverLoop(int r, int g, int b, int button, uint32_t dir) {
 	//SERVER
@@ -683,7 +689,7 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir) {
             }
         }
         //send map
-        sendMap();
+    sendMap(gameworld);
 }
 
 void clientLoop(int r, int g, int b, int button, uint32_t dir) {
@@ -746,7 +752,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                 createServerListener();
             }
 
-            serverSendPTable();
+            serverSendPTable(getPlayerIDTable());
             //Show graphic for being in server mode
             col = 1;
             //Starting game by button
@@ -793,6 +799,11 @@ void logicLoop(int r, int g, int b, int button, uint32_t dir) {
         menuLoop(r, g, b, button, dir);
         writeToLCD(player_colours, canvas, parlcd_mem_base);
     }
+}
+
+char *getPlayerIDTable() {
+    //TODO: IMPLEMENT
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
