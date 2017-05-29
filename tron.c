@@ -34,6 +34,7 @@ char *memdev = "/dev/mem";
 
 #define SPILED_REG_BASE_PHYS 0x43c40000
 #define SPILED_REG_SIZE      0x00004000
+#define UNDEF -1
 #define NORTH 0
 #define EAST 1
 #define SOUTH 2
@@ -547,7 +548,17 @@ void clientSend(char *buf) {
 ssize_t listen_message(char *buf, int length, int fd) {
 	struct sockaddr_in receiveSockaddr;
 	socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
-    ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
+	fd_set watch_list;
+    	struct timeval tv;
+        int a = 0;
+
+	FD_ZERO(&watch_list);
+	FD_SET(fd, &watch_list);
+	tv.tv_sec = 0;
+	tv.tv_usec = 1;
+	a = select (fd + 1, &watch_list, NULL, NULL, &tv);
+	if (a < 1) return 0;
+    	ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
 	return result;
 }
 
@@ -559,8 +570,6 @@ void* clientListen(void* args){
 				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
 			}
 		}
-		struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
-		clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
 	}
 }
 
@@ -571,6 +580,9 @@ void* clientListen(void* args){
 char gameworld[HEIGHT][WIDTH];
 char canvas[HEIGHT][WIDTH];
 int gamestatus = 0;
+pthread_t td;
+int std = 0;
+int ctd = 0;
 //endregion
 
 //region variables for server simulation
@@ -637,12 +649,10 @@ char *getPlayerIDTable();
 void *serverListen(void *args) {
     char msg[HEIGHT * WIDTH];
     int l;
-    while (1) {
+    while (server) {
         if ((l = (int) listen_message(msg, HEIGHT * WIDTH, servListenerFD)) > 0 && l < 4) {
             sim_dir[msg[0]] = msg[1];
         }
-        //struct timespec loop_delay = {.tv_sec = 0, .tv_nsec = 5 * 1000 * 1000};
-        //clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
     }
 }
 
@@ -651,7 +661,7 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir) {
         //pass server players actions as a client would.
         sim_dir[0] = (char) dir;
         //simulate the game world
-        for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+        for (int pid = 0; pid < 8; ++pid) {
             //update a single player
             if (sim_alive[pid]) {
                 //player alive
@@ -751,20 +761,35 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                 createServerSender();
                 createServerListener();
             }
-
-            serverSendPTable(getPlayerIDTable());
-            //Show graphic for being in server mode
+	    if (std == 0){
+		if (pthread_create(&td, NULL, serverListen, NULL) == 0){
+		    std = 1;
+		}
+            }
+	    sim_count_alive = 0;
+	    //Show graphic for being in server mode
             col = 1;
             //Starting game by button
             if (button) {
                 col = 3;
                 gamestatus = 1;
-		pthread_t td;
-		pthread_create(&td, NULL, serverListen, NULL);
+		sim_dir[0] = NORTH;
+		for (int i = 0; i < 8; i++){
+			if (sim_dir[i] == UNDEF){
+				sim_alive[i] = 0;
+			} else {
+				sim_alive[i] = 1;
+				sim_count_alive++;
+			}
+		}
             }
             break;
         default:
-            server = 0;
+	    server = 0;
+	    if (std == 1){
+		pthread_join(td);
+		std = 0;
+	    }
             if (lastServer == 1) {
                 createClientListener();
                 createClientSender();
@@ -773,8 +798,8 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
 	    if (button) {
                 //col = 3;
                 gamestatus = 1;
-		pthread_t td;
 		pthread_create(&td, NULL, clientListen, NULL);
+		ctd = 1;
             }
             break;
     }
@@ -834,6 +859,9 @@ int main(int argc, char *argv[]) {
         }
 
     }
+    for (i = 0; i < 8; i++) {
+	sim_dir[i] = UNDEF;
+    }
     unsigned c;
 
     parlcd_mem_base = map_phys_address(PARLCD_REG_BASE_PHYS, PARLCD_REG_SIZE, 0);
@@ -850,7 +878,6 @@ int main(int argc, char *argv[]) {
             parlcd_write_data(parlcd_mem_base, (uint16_t) c);
         }
     }
-
 
 
     /*parlcd_write_cmd(parlcd_mem_base, 0x2c);
