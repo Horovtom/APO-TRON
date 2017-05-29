@@ -753,6 +753,8 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             if (button) {
                 col = 3;
                 gamestatus = 1;
+		pthread_t td;
+		pthread_create(&td, NULL, serverListen, NULL);
             }
             break;
         default:
