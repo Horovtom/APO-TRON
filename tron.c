@@ -64,7 +64,7 @@ char *memdev = "/dev/mem";
 //--------DISPLAY-----------------------------------
 //region variables
 unsigned char *parlcd_mem_base;
-int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x7800, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800};
+int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800, 0xFFFF};
 
 
 //endregion
@@ -456,19 +456,18 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
     }
 
     // bind the port
-    memset(&sockaddr, 0, sizeof(sockaddr));
+    memset(sockaddr, 0, sizeof(*sockaddr));
 
     sockaddr->sin_family = AF_INET;
     sockaddr->sin_port = htons((uint16_t) port);
     sockaddr->sin_addr.s_addr = htonl(INADDR_ANY);
 
-    int status = bind(*fd, (struct sockaddr *) &sockaddr, sizeof(sockaddr));
+    int status = bind(*fd, (struct sockaddr *) sockaddr, sizeof(*sockaddr));
     if (status == -1) {
         close(*fd);
         perror("bind() failed.");
         exit(1);
     }
-
 //    struct sockaddr_in receiveSockaddr;
 //    socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
 //
@@ -478,12 +477,20 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
 
 }
 
+int hasServerL = 0, hasClientL = 0;
+
 void createClientListener() {
-    createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
+    if(hasClientL==0) {
+        createListener(CLIENT_PORT, &cliListenerSockaddr, &cliListenerFD);
+        hasClientL=1;
+    }
 }
 
 void createServerListener() {
-    createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
+    if(hasServerL==0) {
+        createListener(SERVER_PORT, &servListenerSockaddr, &servListenerFD);
+        hasServerL = 1;
+    }
 }
 
 void createSender(int port, struct sockaddr_in *sockaddr, int *fd) {
@@ -491,7 +498,7 @@ void createSender(int port, struct sockaddr_in *sockaddr, int *fd) {
         perror("socket");
         exit(1);
     }
-    memset(&sockaddr, 0, sizeof(sockaddr));
+    memset(sockaddr, 0, sizeof(*sockaddr));
     sockaddr->sin_family = AF_INET;
     sockaddr->sin_port = htons((uint16_t) port);
     sockaddr->sin_addr.s_addr = INADDR_BROADCAST;
@@ -524,6 +531,7 @@ void sendMap(char gameworld[HEIGHT][WIDTH]) {
             msg[(j + i*WIDTH)] = (gameworld[i][j]);
         }
     }
+    printf("sendmap\n");
     serverSend(msg);
 }
 
@@ -723,13 +731,15 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
 }
 
 void resetGame() {
+    printf("RESET GAME\n");
     sim_count_alive = connectedPlayerCount;
-    for (int pid = 0; pid < connectedPlayerCount; ++pid) {
+    for (int pid = 0; pid < connectedPlayerCount+3; ++pid) {
         sim_x[pid] = sim_xspawn[pid];
         sim_y[pid] = sim_yspawn[pid];
         sim_dir[pid] = NORTH;
         sim_alive[pid] = 1;
     }
+    sim_count_alive=connectedPlayerCount+3;
     //wipe the board
     for (int x = 1; x < WIDTH - 2; ++x) {
         for (int y = 1; y < HEIGHT - 2; ++y) {
@@ -738,7 +748,15 @@ void resetGame() {
     }
 }
 
+int laststatus = 0;
+
 void gameLoop(int r, int g, int b, int button, uint32_t dir) {
+    printf("GAME %d\n",sim_count_alive);
+    if(laststatus == 0) {
+        laststatus = 1;
+        resetGame();
+    }
+
     if (server == 1) {
         serverLoop(r, g, b, button, dir);
     } else {
@@ -752,27 +770,30 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
 }
 
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
-    char col;
+    char col = 5;
     //
     switch (dir) {
         case NORTH:
+            printf("SERVER\n");
             //SERVER MODE!
             server = 1;
             if(lastServer==0) {
+                printf("C > S\n");
                 createServerSender();
                 createServerListener();
             }
 	    if (std == 0){
-		if (pthread_create(&td, NULL, serverListen, NULL) == 0){
-		    std = 1;
-		}
-            }
+		    if (pthread_create(&td, NULL, serverListen, NULL) == 0){
+                printf("SERVER THREAD\n");
+		        std = 1;
+		    }
+        }
 	    sim_count_alive = 0;
 	    //Show graphic for being in server mode
-            col = 1;
+            col = 3;
             //Starting game by button
             if (button) {
-                col = 3;
+                col = 1;
                 gamestatus = 1;
 		sim_dir[0] = NORTH;
 		for (int i = 0; i < 8; i++){
@@ -786,23 +807,26 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             }
             break;
         default:
+            printf("CLIENT\n");
 	    server = 0;
 	    if (std == 1){
 		pthread_join(td,NULL);
 		std = 0;
 	    }
             if (lastServer == 1) {
+                printf("S > C\n");
                 createClientListener();
                 createClientSender();
             }
-            col = 0;
+            col = 2;
 	    if (button) {
                 //col = 3;
                 gamestatus = 1;
-		pthread_create(&td, NULL, clientListen, NULL);
-		ctd = 1;
-            }
-            break;
+		        pthread_create(&td, NULL, clientListen, NULL);
+		        ctd = 1;
+                printf("CLIENT THREAD\n");
+        }
+        break;
     }
     lastServer = server;
 
@@ -827,6 +851,7 @@ void logicLoop(int r, int g, int b, int button, uint32_t dir) {
         gameLoop(r, g, b, button, dir);
         writeToLCD(player_colours, gameworld, parlcd_mem_base);
     } else {
+        laststatus = 0;
         //We are in menu
         menuLoop(r, g, b, button, dir);
         writeToLCD(player_colours, canvas, parlcd_mem_base);
