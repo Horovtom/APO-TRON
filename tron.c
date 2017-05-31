@@ -414,8 +414,6 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
 /*
  * Listen for message
  */
-ssize_t listen_message(char *buf, int length, int fd);
-
 /*
  * Client's function for listen thread
  * usage:
@@ -481,14 +479,14 @@ int hasServerL = 0, hasClientL = 0;
 
 void createClientListener() {
     if(hasClientL==0) {
-        createListener(CLIENT_PORT, &cliListenerSockaddr, &cliListenerFD);
+        createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
         hasClientL=1;
     }
 }
 
 void createServerListener() {
     if(hasServerL==0) {
-        createListener(SERVER_PORT, &servListenerSockaddr, &servListenerFD);
+        createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
         hasServerL = 1;
     }
 }
@@ -553,7 +551,7 @@ void clientSend(char *buf) {
     sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
-ssize_t listen_message(char *buf, int length, int fd) {
+ssize_t listen_message(char *buf, int length, char * ipbuff, int fd) {
 	struct sockaddr_in receiveSockaddr;
 	socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
 	fd_set watch_list;
@@ -567,13 +565,16 @@ ssize_t listen_message(char *buf, int length, int fd) {
 	a = select (fd + 1, &watch_list, NULL, NULL, &tv);
 	if (a < 1) return 0;
     	ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
+    char * iptmp = inet_ntoa(receiveSockaddr.sin_addr);
+    strcpy(ipbuff,iptmp);
 	return result;
 }
 
 void* clientListen(void* args){
-	char msg[HEIGHT*WIDTH];
+    char msg[HEIGHT*WIDTH];
+    char ipmsg[100];
 	while(1){
-        if (listen_message(msg, HEIGHT * WIDTH, cliListenerFD) > (HEIGHT * WIDTH) - 2) {
+        if (listen_message(msg, HEIGHT * WIDTH, ipmsg, cliListenerFD) > (HEIGHT * WIDTH) - 2) {
 			for (int i = 0; i<HEIGHT*WIDTH; i++){
 				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
 			}
@@ -607,6 +608,19 @@ int sim_count_alive;
 char cli_pid = 0;
 char cli_dir = NORTH;
 //endregion
+
+void addPlayer() {
+    if(connectedPlayerCount<7)
+    connectedPlayerCount+=1;
+}
+
+void clearPlayers() {
+    connectedPlayerCount=0;
+}
+
+char * getPlayers() {
+    return "test";
+}
 
 //region functions
 /**
@@ -656,10 +670,13 @@ char *getPlayerIDTable();
 
 void *serverListen(void *args) {
     char msg[HEIGHT * WIDTH];
+    char ipmsg[100];
     int l;
     while (server) {
-        if ((l = (int) listen_message(msg, HEIGHT * WIDTH, servListenerFD)) > 0 && l < 4) {
+        if ((l = (int) listen_message(msg, HEIGHT * WIDTH, ipmsg, servListenerFD)) > 0 && l < 4) {
             sim_dir[(unsigned char)msg[0]] = msg[1];
+            printf(ipmsg);
+            addPlayer();
         }
     }
     return NULL;
@@ -713,7 +730,6 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir) {
 
 void clientLoop(int r, int g, int b, int button, uint32_t dir) {
 	//CLIENT
-
         //receive world information
         for (int x = 0; x < WIDTH ; ++x) {
             for (int y = 0; y < HEIGHT ; ++y) {
@@ -732,14 +748,13 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
 
 void resetGame() {
     printf("RESET GAME\n");
-    sim_count_alive = connectedPlayerCount;
-    for (int pid = 0; pid < connectedPlayerCount+3; ++pid) {
+    for (int pid = 0; pid < connectedPlayerCount+1; ++pid) {
         sim_x[pid] = sim_xspawn[pid];
         sim_y[pid] = sim_yspawn[pid];
         sim_dir[pid] = NORTH;
         sim_alive[pid] = 1;
     }
-    sim_count_alive=connectedPlayerCount+3;
+    sim_count_alive=connectedPlayerCount+1;
     //wipe the board
     for (int x = 1; x < WIDTH - 2; ++x) {
         for (int y = 1; y < HEIGHT - 2; ++y) {
@@ -769,8 +784,11 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
     }
 }
 
+int invitecounter = 0;
+
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     char col = 5;
+    invitecounter++;
     //
     switch (dir) {
         case NORTH:
@@ -788,6 +806,11 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
 		        std = 1;
 		    }
         }
+            if(invitecounter>10) {
+                invitecounter = 0;
+                printf("Invite\n");
+                serverSend("Invite for Tron");
+            }
 	    sim_count_alive = 0;
 	    //Show graphic for being in server mode
             col = 3;
@@ -808,6 +831,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             break;
         default:
             printf("CLIENT\n");
+            clearPlayers();
 	    server = 0;
 	    if (std == 1){
 		pthread_join(td,NULL);
@@ -835,7 +859,9 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     for (int i = 0; i < HEIGHT; ++i) {
         for (int j = 0; j < WIDTH; ++j) {
             //if (i > 5 && i < 10 && j > 5 && j < 10) {
-            if (maskText("255.1234567", 2, 2, j, i)) {
+            char txt[50];
+            sprintf(txt,"...%d...",connectedPlayerCount+1);
+            if (maskText(txt, 2, 2, j, i)) {
                 canvas[i][j] = col;
             } else {
                 canvas[i][j] = 0;
