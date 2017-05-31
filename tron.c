@@ -310,7 +310,7 @@ void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_m
             if ((i % LINEWIDTH == 0) || (j % LINEWIDTH == 0)) {
                 parlcd_write_data(parlcd_mem_base, 0xFFFF);
             } else {
-                parlcd_write_data(parlcd_mem_base, (uint16_t) player_colours[map[i / LINEWIDTH][j / LINEWIDTH]]);
+                parlcd_write_data(parlcd_mem_base, (uint16_t) player_colours[(unsigned char)map[i / LINEWIDTH][j / LINEWIDTH]]);
             }
 
         }
@@ -651,9 +651,10 @@ void *serverListen(void *args) {
     int l;
     while (server) {
         if ((l = (int) listen_message(msg, HEIGHT * WIDTH, servListenerFD)) > 0 && l < 4) {
-            sim_dir[msg[0]] = msg[1];
+            sim_dir[(unsigned char)msg[0]] = msg[1];
         }
     }
+    return NULL;
 }
 
 void serverLoop(int r, int g, int b, int button, uint32_t dir) {
@@ -787,7 +788,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
         default:
 	    server = 0;
 	    if (std == 1){
-		pthread_join(td);
+		pthread_join(td,NULL);
 		std = 0;
 	    }
             if (lastServer == 1) {

@@ -6,9 +6,9 @@ LDFLAGS=-lrt -lpthread
 %.o:%.c
 	$(CC) $(CFLAGS) -c $<
 
-all: mzapo_lcdtest
+all: tron
 
-mzapo_lcdtest: mzapo_lcdtest.o
+tron: tron.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -L. $^ -o $@
 
 
@@ -22,6 +22,6 @@ depend:
 	@touch depend
 
 clean:
-	rm -f *.o *.a mzapo_lcdtest depend
+	rm -f *.o *.a tron depend
 
 -include depend
