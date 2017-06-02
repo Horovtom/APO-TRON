@@ -60,12 +60,31 @@ char *memdev = "/dev/mem";
 #define CLIENT_PORT 12345
 #define BROADCAST_ADDRESS "192.168.202.184"
 
+/* some RGB color definitions                                                 */
+#define Black           0x0000      /*   0,   0,   0 */
+#define Navy            0x000F      /*   0,   0, 128 */
+#define DarkGreen       0x03E0      /*   0, 128,   0 */
+#define DarkCyan        0x03EF      /*   0, 128, 128 */
+#define Maroon          0x7800      /* 128,   0,   0 */
+#define Purple          0x780F      /* 128,   0, 128 */
+#define Olive           0x7BE0      /* 128, 128,   0 */
+#define LightGrey       0xC618      /* 192, 192, 192 */
+#define DarkGrey        0x7BEF      /* 128, 128, 128 */
+#define Blue            0x001F      /*   0,   0, 255 */
+#define Green           0x07E0      /*   0, 255,   0 */
+#define Cyan            0x07FF      /*   0, 255, 255 */
+#define Red             0xF800      /* 255,   0,   0 */
+#define Magenta         0xF81F      /* 255,   0, 255 */
+#define Yellow          0xFFE0      /* 255, 255,   0 */
+#define White           0xFFFF      /* 255, 255, 255 */
+#define Orange          0xFD20      /* 255, 165,   0 */
+#define GreenYellow     0xAFE5      /* 173, 255,  47 */
+#define Pink                        0xF81F
 
 //--------DISPLAY-----------------------------------
 //region variables
 unsigned char *parlcd_mem_base;
-int player_colours[10] = {0x0000, 0xFFFF, 0xF800, 0x07E0, 0x07FF, 0xFFE0, 0xF800, 0xF800, 0xF800, 0xFFFF};
-
+int player_colours[10] = {Black, White, Pink, Green, Cyan, Yellow, Magenta, Red, White, Orange};
 
 //endregion
 //region functions
@@ -603,16 +622,13 @@ int sim_count_alive;
 //endregion
 
 //region variables for client
-char cli_pid = 0;
+char cli_pid;
 char cli_dir = NORTH;
 //endregion
 
 void addPlayer(int id) {
-    printf("Hi NIgga %d, headed %d\n",id, sim_dir[id]);
     if(sim_dir[id]==UNDEF) {
-        printf("Welcome UNDEF NIgga %d\n",id);
         if (connectedPlayerCount < 7) {
-            printf("Welcome to my crib NIgga %d\n",id);
             connectedPlayerCount += 1;
             sim_dir[id]=NORTH;
         }
@@ -693,7 +709,7 @@ void *serverListen(void *args) {
 void serverLoop(int r, int g, int b, int button, uint32_t dir) {
     //SERVER
     //pass server players actions as a client would.
-    sim_dir[0] = (char) dir;
+    sim_dir[(int) cli_pid] = (char) dir;
     //simulate the game world
     for (int pid = 0; pid < 8; ++pid) {
         //update a single player
@@ -825,15 +841,16 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             if (button) {
                 col = 1;
                 gamestatus = 1;
-                sim_dir[0] = NORTH;
-                for (int i = 0; i < 8; i++) {
+                sim_dir[(int) cli_pid]=NORTH;
+                resetGame();
+                /*for (int i = 0; i < 8; i++) {
                     if (sim_dir[i] == UNDEF) {
                         sim_alive[i] = 0;
                     } else {
                         sim_alive[i] = 1;
                         sim_count_alive++;
                     }
-                }
+                }*/
             }
             break;
         default:
@@ -905,7 +922,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     } else {
         cli_pid = (char) atoi(argv[1]);
-        if (cli_pid >= 7 || cli_pid <0){
+        if (cli_pid > 7 || cli_pid <0){
             perror("BAD ARGS");
             exit(1);
         }
@@ -928,7 +945,9 @@ int main(int argc, char *argv[]) {
 
     }
     for (i = 0; i < 8; i++) {
-        sim_dir[i] = UNDEF;
+        if(i!=(int)cli_pid) {
+            sim_dir[i] = UNDEF;
+        }
     }
     unsigned c;
 
