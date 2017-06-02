@@ -599,6 +599,7 @@ int sim_y[8];
 char sim_dir[8];
 int sim_alive[8];
 int sim_count_alive;
+int clientID;
 //endregion
 
 //region variables for client
@@ -891,6 +892,13 @@ int main(int argc, char *argv[]) {
 
     mem_base = map_phys_address(SPILED_REG_BASE_PHYS, SPILED_REG_SIZE, 0);
 
+    if (argc != 2) {
+        perror("MOAR ARGS");
+        exit(1);
+    } else {
+        clientID = atoi(argv[1]);
+        printf("client id %d\n", clientID);
+    }
     if (mem_base == NULL)
         exit(1);
     uint32_t rgb_knobs_value;
