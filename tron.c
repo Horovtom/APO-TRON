@@ -372,12 +372,12 @@ void createServerSender();
 /**
  * Sends message from the client socket
  */
-void clientSend(char *buf);
+void clientSend(char *buf, int size);
 
 /**
  * Sends message from the server socket
  */
-void serverSend(char *buf);
+void serverSend(char *buf, int size);
 
 /**
  * Uses {@link #serverSend} to send stuff from server send socket
@@ -528,7 +528,7 @@ void sendMap(char gameworld[HEIGHT][WIDTH]) {
         }
     }
     printf("sendmap\n");
-    serverSend(msg);
+    serverSend(msg, sizeof(char)*WIDTH*HEIGHT);
 }
 
 void createServerSender() {
@@ -540,13 +540,13 @@ void serverSendPTable(char *playerIDs) {
     strcat(buf, playerIDs);
 }
 
-void serverSend(char *buf) {
-    sendto(servSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &servSenderSockaddr,
+void serverSend(char *buf, int size) {
+    sendto(servSenderFD, buf, size, 0, (const struct sockaddr *) &servSenderSockaddr,
            sizeof(servSenderSockaddr));
 }
 
-void clientSend(char *buf) {
-    sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
+void clientSend(char *buf, int size) {
+    sendto(cliSenderFD, buf, size, 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
 ssize_t listen_message(char *buf, int length, char *ipbuff, int fd) {
@@ -730,9 +730,10 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir) {
 void clientLoop(int r, int g, int b, int button, uint32_t dir) {
     //CLIENT
     //receive world information
+    cli_dir = dir;
     for (int x = 0; x < WIDTH; ++x) {
         for (int y = 0; y < HEIGHT; ++y) {
-            if (x > 0 && x < WIDTH - 2 && y > 0 && y < HEIGHT - 2) {
+            if (x > 0 && x < WIDTH - 1 && y > 0 && y < HEIGHT - 1) {
                 gameworld[y][x] = recieved_gameworld[y][x]; //TODO
             } else {
                 gameworld[y][x] = cli_pid;
@@ -741,8 +742,10 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
     }
     //broadcast my dir
     char msg[2];
-    sprintf(msg, "%d%d", cli_pid, cli_dir);
-    clientSend(msg);
+    printf( "%d%d", cli_pid, cli_dir);
+    msg[0]=cli_pid;
+    msg[1]=cli_dir;
+    clientSend(msg, 2*sizeof(char));
 }
 
 void resetGame() {
@@ -783,11 +786,9 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
     }
 }
 
-int invitecounter = 0;
 
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     char col = 5;
-    invitecounter++;
     //
     switch (dir) {
         case NORTH:
@@ -804,11 +805,6 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                     printf("SERVER THREAD\n");
                     std = 1;
                 }
-            }
-            if (invitecounter > 10) {
-                invitecounter = 0;
-                printf("Invite\n");
-                serverSend("Invite for Tron");
             }
             sim_count_alive = 0;
             //Show graphic for being in server mode
@@ -896,7 +892,11 @@ int main(int argc, char *argv[]) {
         perror("MOAR ARGS");
         exit(1);
     } else {
-        clientID = atoi(argv[1]);
+        cli_pid = atoi(argv[1]);
+        if (cli_pid >= 7 || cli_pid <0){
+            perror("BAD ARGS");
+            exit(1);
+        }
         printf("client id %d\n", clientID);
     }
     if (mem_base == NULL)
@@ -907,8 +907,8 @@ int main(int argc, char *argv[]) {
     for (i = 0; i < HEIGHT; ++i) {
         for (j = 0; j < WIDTH; ++j) {
             if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) {
-                gameworld[i][j] = 1;
-                recieved_gameworld[i][j] = 1;
+                gameworld[i][j] = cli_pid+2;
+                recieved_gameworld[i][j] = cli_pid+2;
             } else {
                 gameworld[i][j] = 0;
                 recieved_gameworld[i][j] = 0;
