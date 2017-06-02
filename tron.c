@@ -34,7 +34,7 @@ char *memdev = "/dev/mem";
 
 #define SPILED_REG_BASE_PHYS 0x43c40000
 #define SPILED_REG_SIZE      0x00004000
-#define UNDEF -1
+#define UNDEF 42
 #define NORTH 0
 #define EAST 1
 #define SOUTH 2
@@ -428,6 +428,7 @@ void *clientListen(void *args);
  */
 void *serverListen(void *args);
 
+ssize_t listen_message(char *buf, int length, char *ipbuff, int fd, int flags);
 //endregion
 //endregion
 
@@ -549,7 +550,7 @@ void clientSend(char *buf, int size) {
     sendto(cliSenderFD, buf, size, 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
-ssize_t listen_message(char *buf, int length, char *ipbuff, int fd) {
+ssize_t listen_message(char *buf, int length, char *ipbuff, int fd, int flags) {
     struct sockaddr_in receiveSockaddr;
     socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
     fd_set watch_list;
@@ -572,7 +573,7 @@ void *clientListen(void *args) {
     char msg[HEIGHT * WIDTH];
     char ipmsg[100];
     while (1) {
-        if (listen_message(msg, HEIGHT * WIDTH, ipmsg, cliListenerFD) > (HEIGHT * WIDTH) - 2) {
+        if (listen_message(msg, HEIGHT * WIDTH, ipmsg, cliListenerFD, MSG_WAITALL) > (HEIGHT * WIDTH) - 2) {
             for (int i = 0; i < HEIGHT * WIDTH; i++) {
                 recieved_gameworld[i / WIDTH][i % WIDTH] = msg[i];
             }
@@ -596,10 +597,9 @@ int sim_xspawn[8] = {5, 10, 15, 20, 25, 30, 35, 5};
 int sim_yspawn[8] = {5, 10, 15, 20, 25, 5, 10, 25};
 int sim_x[8];
 int sim_y[8];
-char sim_dir[8];
+char sim_dir[8] = {UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF};
 int sim_alive[8];
 int sim_count_alive;
-int clientID;
 //endregion
 
 //region variables for client
@@ -607,13 +607,23 @@ char cli_pid = 0;
 char cli_dir = NORTH;
 //endregion
 
-void addPlayer() {
-    if (connectedPlayerCount < 7)
-        connectedPlayerCount += 1;
+void addPlayer(int id) {
+    printf("Hi NIgga %d, headed %d\n",id, sim_dir[id]);
+    if(sim_dir[id]==UNDEF) {
+        printf("Welcome UNDEF NIgga %d\n",id);
+        if (connectedPlayerCount < 7) {
+            printf("Welcome to my crib NIgga %d\n",id);
+            connectedPlayerCount += 1;
+            sim_dir[id]=NORTH;
+        }
+    }
 }
 
 void clearPlayers() {
     connectedPlayerCount = 0;
+    for(int i =0; i<8; ++i) {
+        sim_dir[i] = UNDEF;
+    }
 }
 
 char *getPlayers() {
@@ -671,10 +681,10 @@ void *serverListen(void *args) {
     char ipmsg[100];
     int l;
     while (server) {
-        if ((l = (int) listen_message(msg, HEIGHT * WIDTH, ipmsg, servListenerFD)) > 0 && l < 4) {
+        if ((l = (int) listen_message(msg, HEIGHT * WIDTH, ipmsg, servListenerFD, 0)) > 0 && l < 4) {
+            if (!gamestatus) addPlayer(msg[0]);
             sim_dir[(unsigned char) msg[0]] = msg[1];
-            printf(ipmsg);
-            if (!gamestatus) addPlayer();
+//            printf(ipmsg);
         }
     }
     return NULL;
@@ -736,7 +746,7 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
             if (x > 0 && x < WIDTH - 1 && y > 0 && y < HEIGHT - 1) {
                 gameworld[y][x] = recieved_gameworld[y][x]; //TODO
             } else {
-                gameworld[y][x] = cli_pid;
+                gameworld[y][x] = cli_pid+2;
             }
         }
     }
@@ -750,16 +760,18 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
 
 void resetGame() {
     printf("RESET GAME\n");
-    for (int pid = 0; pid < connectedPlayerCount + 1; ++pid) {
-        sim_x[pid] = sim_xspawn[pid];
-        sim_y[pid] = sim_yspawn[pid];
-        sim_dir[pid] = NORTH;
-        sim_alive[pid] = 1;
+    for (int pid = 0; pid < 8; ++pid) {
+        if (sim_dir[pid] !=UNDEF) {
+            sim_x[pid] = sim_xspawn[pid];
+            sim_y[pid] = sim_yspawn[pid];
+            sim_dir[pid] = NORTH;
+            sim_alive[pid] = 1;
+        }
     }
     sim_count_alive = connectedPlayerCount + 1;
     //wipe the board
-    for (int x = 1; x < WIDTH - 2; ++x) {
-        for (int y = 1; y < HEIGHT - 2; ++y) {
+    for (int x = 1; x < WIDTH - 1; ++x) {
+        for (int y = 1; y < HEIGHT - 1; ++y) {
             gameworld[y][x] = 0;
         }
     }
@@ -826,7 +838,6 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             break;
         default:
             printf("CLIENT\n");
-            clearPlayers();
             server = 0;
             if (std == 1) {
                 pthread_join(td, NULL);
@@ -834,6 +845,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             }
             if (lastServer == 1) {
                 printf("S > C\n");
+                clearPlayers();
                 createClientListener();
                 createClientSender();
             }
@@ -892,12 +904,11 @@ int main(int argc, char *argv[]) {
         perror("MOAR ARGS");
         exit(1);
     } else {
-        cli_pid = atoi(argv[1]);
+        cli_pid = (char) atoi(argv[1]);
         if (cli_pid >= 7 || cli_pid <0){
             perror("BAD ARGS");
             exit(1);
         }
-        printf("client id %d\n", clientID);
     }
     if (mem_base == NULL)
         exit(1);
