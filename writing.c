@@ -113,7 +113,7 @@ int* charToMask(char c) {
 
 /*1 if mask, 0 if not*/
 int maskText(char * text, int textx, int texty, int cursorx, int cursory) {
-    int len = strlen(text);
+    int len = (int) strlen(text);
     if(cursorx >= textx && cursorx < textx+len*4 && cursory >= texty && cursory < texty+5) {
         int inletterx = (cursorx - textx)%4;
         if(inletterx==3) {return 0;}

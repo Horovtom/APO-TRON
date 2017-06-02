@@ -82,12 +82,12 @@ void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
         return NULL;
     }
 
-    pagesize = sysconf(_SC_PAGESIZE);
+    pagesize = (unsigned long) sysconf(_SC_PAGESIZE);
 
     mem_window_size = ((region_base & (pagesize - 1)) + region_size + pagesize - 1) & ~(pagesize - 1);
 
     mm = mmap(NULL, mem_window_size, PROT_WRITE | PROT_READ,
-            MAP_SHARED, fd, region_base & ~(pagesize - 1));
+              MAP_SHARED, fd, region_base & ~(pagesize - 1));
     mem = mm + (region_base & (pagesize - 1));
 
     if (mm == MAP_FAILED) {
@@ -112,7 +112,7 @@ void parlcd_write_data2x(unsigned char *parlcd_mem_base, uint32_t data) {
 
 void parlcd_delay(int msec) {
     struct timespec wait_delay = {.tv_sec = msec / 1000,
-        .tv_nsec = (msec % 1000) * 1000 * 1000};
+            .tv_nsec = (msec % 1000) * 1000 * 1000};
     clock_nanosleep(CLOCK_MONOTONIC, 0, &wait_delay, NULL);
 }
 
@@ -310,7 +310,8 @@ void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_m
             if ((i % LINEWIDTH == 0) || (j % LINEWIDTH == 0)) {
                 parlcd_write_data(parlcd_mem_base, 0xFFFF);
             } else {
-                parlcd_write_data(parlcd_mem_base, (uint16_t) player_colours[(unsigned char)map[i / LINEWIDTH][j / LINEWIDTH]]);
+                parlcd_write_data(parlcd_mem_base,
+                                  (uint16_t) player_colours[(unsigned char) map[i / LINEWIDTH][j / LINEWIDTH]]);
             }
 
         }
@@ -323,7 +324,6 @@ void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_m
 //--------NETWORKING---------------------------------------------
 //region variables
 //are we connected to another player
-int netstatus = 0;
 /**
  * are we a server?
  */
@@ -332,8 +332,6 @@ int server = 0;
  * Used to determine the last state of {@link #server}
  */
 int lastServer;
-int connectCounter = 0;
-int CONNECTDELAY = 2;
 //region sender
 struct sockaddr_in servSenderSockaddr;
 struct sockaddr_in cliSenderSockaddr;
@@ -420,7 +418,7 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
  * pthread_t td;
  * pthread_create(&td, NULL, clientListen, NULL);
  */
-void* clientListen(void* args);
+void *clientListen(void *args);
 
 /*
  * Server's function for listen thread
@@ -428,7 +426,7 @@ void* clientListen(void* args);
  * pthread_t td;
  * pthread_create(&td, NULL, serverListen, NULL);
  */
-void* serverListen(void* args);
+void *serverListen(void *args);
 
 //endregion
 //endregion
@@ -478,14 +476,14 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
 int hasServerL = 0, hasClientL = 0;
 
 void createClientListener() {
-    if(hasClientL==0) {
+    if (hasClientL == 0) {
         createListener(SERVER_PORT, &cliListenerSockaddr, &cliListenerFD);
-        hasClientL=1;
+        hasClientL = 1;
     }
 }
 
 void createServerListener() {
-    if(hasServerL==0) {
+    if (hasServerL == 0) {
         createListener(CLIENT_PORT, &servListenerSockaddr, &servListenerFD);
         hasServerL = 1;
     }
@@ -522,11 +520,11 @@ void createClientSender() {
 }
 
 void sendMap(char gameworld[HEIGHT][WIDTH]) {
-	
+
     char msg[WIDTH * HEIGHT];
     for (int i = 0; i < HEIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
-            msg[(j + i*WIDTH)] = (gameworld[i][j]);
+            msg[(j + i * WIDTH)] = (gameworld[i][j]);
         }
     }
     printf("sendmap\n");
@@ -551,35 +549,35 @@ void clientSend(char *buf) {
     sendto(cliSenderFD, buf, sizeof(buf), 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
-ssize_t listen_message(char *buf, int length, char * ipbuff, int fd) {
-	struct sockaddr_in receiveSockaddr;
-	socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
-	fd_set watch_list;
-    	struct timeval tv;
-        int a = 0;
+ssize_t listen_message(char *buf, int length, char *ipbuff, int fd) {
+    struct sockaddr_in receiveSockaddr;
+    socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
+    fd_set watch_list;
+    struct timeval tv;
+    int a = 0;
 
-	FD_ZERO(&watch_list);
-	FD_SET(fd, &watch_list);
-	tv.tv_sec = 0;
-	tv.tv_usec = 1;
-	a = select (fd + 1, &watch_list, NULL, NULL, &tv);
-	if (a < 1) return 0;
-    	ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
-    char * iptmp = inet_ntoa(receiveSockaddr.sin_addr);
-    strcpy(ipbuff,iptmp);
-	return result;
+    FD_ZERO(&watch_list);
+    FD_SET(fd, &watch_list);
+    tv.tv_sec = 0;
+    tv.tv_usec = 1;
+    a = select(fd + 1, &watch_list, NULL, NULL, &tv);
+    if (a < 1) return 0;
+    ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
+    char *iptmp = inet_ntoa(receiveSockaddr.sin_addr);
+    strcpy(ipbuff, iptmp);
+    return result;
 }
 
-void* clientListen(void* args){
-    char msg[HEIGHT*WIDTH];
+void *clientListen(void *args) {
+    char msg[HEIGHT * WIDTH];
     char ipmsg[100];
-	while(1){
+    while (1) {
         if (listen_message(msg, HEIGHT * WIDTH, ipmsg, cliListenerFD) > (HEIGHT * WIDTH) - 2) {
-			for (int i = 0; i<HEIGHT*WIDTH; i++){
-				recieved_gameworld[i/WIDTH][i%WIDTH]=msg[i];
-			}
-		}
-	}
+            for (int i = 0; i < HEIGHT * WIDTH; i++) {
+                recieved_gameworld[i / WIDTH][i % WIDTH] = msg[i];
+            }
+        }
+    }
 }
 
 
@@ -591,7 +589,6 @@ char canvas[HEIGHT][WIDTH];
 int gamestatus = 0;
 pthread_t td;
 int std = 0;
-int ctd = 0;
 //endregion
 
 //region variables for server simulation
@@ -610,15 +607,15 @@ char cli_dir = NORTH;
 //endregion
 
 void addPlayer() {
-    if(connectedPlayerCount<7)
-    connectedPlayerCount+=1;
+    if (connectedPlayerCount < 7)
+        connectedPlayerCount += 1;
 }
 
 void clearPlayers() {
-    connectedPlayerCount=0;
+    connectedPlayerCount = 0;
 }
 
-char * getPlayers() {
+char *getPlayers() {
     return "test";
 }
 
@@ -674,87 +671,88 @@ void *serverListen(void *args) {
     int l;
     while (server) {
         if ((l = (int) listen_message(msg, HEIGHT * WIDTH, ipmsg, servListenerFD)) > 0 && l < 4) {
-            sim_dir[(unsigned char)msg[0]] = msg[1];
+            sim_dir[(unsigned char) msg[0]] = msg[1];
             printf(ipmsg);
-            addPlayer();
+            if (!gamestatus) addPlayer();
         }
     }
     return NULL;
 }
 
 void serverLoop(int r, int g, int b, int button, uint32_t dir) {
-	//SERVER
-        //pass server players actions as a client would.
-        sim_dir[0] = (char) dir;
-        //simulate the game world
-        for (int pid = 0; pid < 8; ++pid) {
-            //update a single player
-            if (sim_alive[pid]) {
-                //player alive
-                switch (sim_dir[pid]) {
-                    case NORTH:
-                        sim_y[pid]--;
-                        break;
-                    case EAST:
-                        sim_x[pid]++;
-                        break;
-                    case SOUTH:
-                        sim_y[pid]++;
-                        break;
-                    case WEST:
-                        sim_x[pid]--;
-                        break;
-                }
-                if (gameworld[sim_y[pid]][sim_x[pid]] == 0) {
-                    //safe ground, paint the tile and do nothing
-                    gameworld[sim_y[pid]][sim_x[pid]] = (char) (pid + 2);
-                } else {
-                    //collided, reduce player count
-                    sim_alive[pid] = 0;
-                    sim_count_alive -= 1;
-                    if (sim_count_alive <= 1) {
-                        //victory - only one player left alive
-                        //reset game and start over.
-                        resetGame();
-                        return;
-                    }
-                }
-            } else {
-                //dead player
-                continue;
+    //SERVER
+    //pass server players actions as a client would.
+    sim_dir[0] = (char) dir;
+    //simulate the game world
+    for (int pid = 0; pid < 8; ++pid) {
+        //update a single player
+        if (sim_alive[pid]) {
+            //player alive
+            switch (sim_dir[pid]) {
+                case NORTH:
+                    sim_y[pid]--;
+                    break;
+                case EAST:
+                    sim_x[pid]++;
+                    break;
+                case SOUTH:
+                    sim_y[pid]++;
+                    break;
+                default:
+                case WEST:
+                    sim_x[pid]--;
+                    break;
             }
+            if (gameworld[sim_y[pid]][sim_x[pid]] == 0) {
+                //safe ground, paint the tile and do nothing
+                gameworld[sim_y[pid]][sim_x[pid]] = (char) (pid + 2);
+            } else {
+                //collided, reduce player count
+                sim_alive[pid] = 0;
+                sim_count_alive -= 1;
+                if (sim_count_alive <= 1) {
+                    //victory - only one player left alive
+                    //reset game and start over.
+                    resetGame();
+                    return;
+                }
+            }
+        } else {
+            //dead player
+            continue;
         }
-        //send map
+    }
+    //send map
     sendMap(gameworld);
 }
 
 void clientLoop(int r, int g, int b, int button, uint32_t dir) {
-	//CLIENT
-        //receive world information
-        for (int x = 0; x < WIDTH ; ++x) {
-            for (int y = 0; y < HEIGHT ; ++y) {
-                if(x>0 && x < WIDTH-2 && y>0 && y<HEIGHT-2) {
-                    gameworld[y][x] = recieved_gameworld[y][x]; //TODO
-                } else {
-                    gameworld[y][x] = cli_pid;
-                }
+    //CLIENT
+    //receive world information
+    for (int x = 0; x < WIDTH; ++x) {
+        for (int y = 0; y < HEIGHT; ++y) {
+            if (x > 0 && x < WIDTH - 2 && y > 0 && y < HEIGHT - 2) {
+                gameworld[y][x] = recieved_gameworld[y][x]; //TODO
+            } else {
+                gameworld[y][x] = cli_pid;
             }
         }
-        //broadcast my dir
-        char msg[2];
-        sprintf(msg, "%d%d", cli_pid, cli_dir);
-        clientSend(msg);
+    }
+    //broadcast my dir
+    char msg[2];
+    sprintf(msg, "%d%d", cli_pid, cli_dir);
+    clientSend(msg);
 }
 
 void resetGame() {
     printf("RESET GAME\n");
-    for (int pid = 0; pid < connectedPlayerCount+1; ++pid) {
+    for (int pid = 0; pid < connectedPlayerCount + 1; ++pid) {
         sim_x[pid] = sim_xspawn[pid];
         sim_y[pid] = sim_yspawn[pid];
         sim_dir[pid] = NORTH;
         sim_alive[pid] = 1;
     }
-    sim_count_alive=connectedPlayerCount+1;
+    sim_count_alive = connectedPlayerCount + 1;
     //wipe the board
     for (int x = 1; x < WIDTH - 2; ++x) {
         for (int y = 1; y < HEIGHT - 2; ++y) {
@@ -766,8 +764,8 @@ void resetGame() {
 int laststatus = 0;
 
 void gameLoop(int r, int g, int b, int button, uint32_t dir) {
-    printf("GAME %d\n",sim_count_alive);
-    if(laststatus == 0) {
+    printf("GAME %d\n", sim_count_alive);
+    if (laststatus == 0) {
         laststatus = 1;
         resetGame();
     }
@@ -795,62 +793,61 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             printf("SERVER\n");
             //SERVER MODE!
             server = 1;
-            if(lastServer==0) {
+            if (lastServer == 0) {
                 printf("C > S\n");
                 createServerSender();
                 createServerListener();
             }
-	    if (std == 0){
-		    if (pthread_create(&td, NULL, serverListen, NULL) == 0){
-                printf("SERVER THREAD\n");
-		        std = 1;
-		    }
-        }
-            if(invitecounter>10) {
+            if (std == 0) {
+                if (pthread_create(&td, NULL, serverListen, NULL) == 0) {
+                    printf("SERVER THREAD\n");
+                    std = 1;
+                }
+            }
+            if (invitecounter > 10) {
                 invitecounter = 0;
                 printf("Invite\n");
                 serverSend("Invite for Tron");
             }
-	    sim_count_alive = 0;
-	    //Show graphic for being in server mode
+            sim_count_alive = 0;
+            //Show graphic for being in server mode
             col = 3;
             //Starting game by button
             if (button) {
                 col = 1;
                 gamestatus = 1;
-		sim_dir[0] = NORTH;
-		for (int i = 0; i < 8; i++){
-			if (sim_dir[i] == UNDEF){
-				sim_alive[i] = 0;
-			} else {
-				sim_alive[i] = 1;
-				sim_count_alive++;
-			}
-		}
+                sim_dir[0] = NORTH;
+                for (int i = 0; i < 8; i++) {
+                    if (sim_dir[i] == UNDEF) {
+                        sim_alive[i] = 0;
+                    } else {
+                        sim_alive[i] = 1;
+                        sim_count_alive++;
+                    }
+                }
             }
             break;
         default:
             printf("CLIENT\n");
             clearPlayers();
-	    server = 0;
-	    if (std == 1){
-		pthread_join(td,NULL);
-		std = 0;
-	    }
+            server = 0;
+            if (std == 1) {
+                pthread_join(td, NULL);
+                std = 0;
+            }
             if (lastServer == 1) {
                 printf("S > C\n");
                 createClientListener();
                 createClientSender();
             }
             col = 2;
-	    if (button) {
+            if (button) {
                 //col = 3;
                 gamestatus = 1;
-		        pthread_create(&td, NULL, clientListen, NULL);
-		        ctd = 1;
+                pthread_create(&td, NULL, clientListen, NULL);
                 printf("CLIENT THREAD\n");
-        }
-        break;
+            }
+            break;
     }
     lastServer = server;
 
@@ -860,7 +857,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
         for (int j = 0; j < WIDTH; ++j) {
             //if (i > 5 && i < 10 && j > 5 && j < 10) {
             char txt[50];
-            sprintf(txt,"...%d...",connectedPlayerCount+1);
+            sprintf(txt, "...%d...", connectedPlayerCount + 1);
             if (maskText(txt, 2, 2, j, i)) {
                 canvas[i][j] = col;
             } else {
@@ -902,17 +899,17 @@ int main(int argc, char *argv[]) {
     for (i = 0; i < HEIGHT; ++i) {
         for (j = 0; j < WIDTH; ++j) {
             if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) {
-	    	gameworld[i][j] = 1;
-		recieved_gameworld[i][j] = 1;
+                gameworld[i][j] = 1;
+                recieved_gameworld[i][j] = 1;
             } else {
-	    	gameworld[i][j] = 0;
-		recieved_gameworld[i][j] = 0;
-	    }
+                gameworld[i][j] = 0;
+                recieved_gameworld[i][j] = 0;
+            }
         }
 
     }
     for (i = 0; i < 8; i++) {
-	sim_dir[i] = UNDEF;
+        sim_dir[i] = UNDEF;
     }
     unsigned c;
 
