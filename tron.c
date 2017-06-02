@@ -77,10 +77,11 @@ char *memdev = "/dev/mem";
 //endregion
 
 //--------DISPLAY-----------------------------------
+
 //region variables
+
 unsigned char *parlcd_mem_base;
 int player_colours[10] = {Black, White, Pink, Green, Cyan, Yellow, Magenta, Red, White, Orange};
-
 //endregion
 //region functions
 void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
@@ -312,8 +313,8 @@ void writeToLCD(int colours[3], char map[HEIGHT][WIDTH], unsigned char *parlcd_m
 }
 //endregion
 
-
 //--------NETWORKING---------------------------------------------
+
 //region variables
 //are we connected to another player
 /**
@@ -339,7 +340,6 @@ int cliListenerFD;
 int connectedPlayerCount = 0;
 //region recieved info
 char recieved_gameworld[HEIGHT][WIDTH];
-//endregion
 //endregion
 
 //region functions
@@ -375,11 +375,6 @@ void serverSend(char *buf, int size);
  * Uses {@link #serverSend} to send stuff from server send socket
  */
 void sendMap(char gameworld[HEIGHT][WIDTH]);
-
-/**
- * Broadcasts player table to the network. Used in server mode to notify clients that they are connected.
- */
-void serverSendPTable(char *playerIDs);
 //endregion
 
 //region receivers
@@ -401,9 +396,6 @@ void createClientListener();
  */
 void createListener(int port, struct sockaddr_in *sockaddr, int *fd);
 
-/*
- * Listen for message
- */
 /*
  * Client's function for listen thread
  * usage:
@@ -528,11 +520,6 @@ void createServerSender() {
     createSender(SERVER_PORT, &servSenderSockaddr, &servSenderFD);
 }
 
-void serverSendPTable(char *playerIDs) {
-    char buf[128] = "Game: ";
-    strcat(buf, playerIDs);
-}
-
 void serverSend(char *buf, int size) {
     sendto(servSenderFD, buf, (size_t) size, 0, (const struct sockaddr *) &servSenderSockaddr,
            sizeof(servSenderSockaddr));
@@ -555,7 +542,8 @@ ssize_t listen_message(char *buf, int length, char *ipbuff, int fd, int flags) {
     tv.tv_usec = 1;
     a = select(fd + 1, &watch_list, NULL, NULL, &tv);
     if (a < 1) return 0;
-    ssize_t result = recvfrom(fd, buf, (size_t) length, 0, (struct sockaddr *) &receiveSockaddr, &receiveSockaddrLen);
+    ssize_t result = recvfrom(fd, buf, (size_t) length, flags, (struct sockaddr *) &receiveSockaddr,
+                              &receiveSockaddrLen);
     char *iptmp = inet_ntoa(receiveSockaddr.sin_addr);
     strcpy(ipbuff, iptmp);
     return result;
@@ -657,7 +645,6 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir);
 char *getPlayerIDTable();
 //endregion
 //endregion
-
 
 //----------IMPLEMENTATION OF GAME---------------------------------
 
@@ -783,7 +770,6 @@ void gameLoop(int r, int g, int b, int button, uint32_t dir) {
     }
 }
 
-
 void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     char col = 5;
     //
@@ -875,7 +861,6 @@ void logicLoop(int r, int g, int b, int button, uint32_t dir) {
         writeToLCD(player_colours, canvas, parlcd_mem_base);
     }
 }
-
 
 int main(int argc, char *argv[]) {
     unsigned char *mem_base;
@@ -975,6 +960,22 @@ int main(int argc, char *argv[]) {
     }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
