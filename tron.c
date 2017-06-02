@@ -32,6 +32,7 @@ char *memdev = "/dev/mem";
 #define EAST 1
 #define SOUTH 2
 #define WEST 3
+static const int verbose = 0;
 
 #define LINEWIDTH 10
 #define SPILED_REG_LED_LINE_o           0x004
@@ -51,7 +52,6 @@ char *memdev = "/dev/mem";
 #define WIDTH 48
 #define SERVER_PORT 12346
 #define CLIENT_PORT 12345
-#define BROADCAST_ADDRESS "192.168.202.184"
 
 //region Color Definitions
 /* some RGB color definitions                                                 */
@@ -82,6 +82,7 @@ char *memdev = "/dev/mem";
 
 unsigned char *parlcd_mem_base;
 int player_colours[10] = {Black, White, Pink, Green, Cyan, Yellow, Magenta, Red, White, Orange};
+
 //endregion
 //region functions
 void *map_phys_address(off_t region_base, size_t region_size, int opt_cached) {
@@ -449,12 +450,6 @@ void createListener(int port, struct sockaddr_in *sockaddr, int *fd) {
         perror("bind() failed.");
         exit(1);
     }
-//    struct sockaddr_in receiveSockaddr;
-//    socklen_t receiveSockaddrLen = sizeof(receiveSockaddr);
-//
-//    size_t bufSize = 16384;
-//    void *buf = malloc(bufSize);
-//    ssize_t result = recvfrom(fd, buf, bufSize, 0, (struct sockaddr *)&receiveSockaddr, &receiveSockaddrLen);
 
 }
 
@@ -512,7 +507,7 @@ void sendMap(char gameworld[HEIGHT][WIDTH]) {
             msg[(j + i * WIDTH)] = (gameworld[i][j]);
         }
     }
-    printf("sendmap\n");
+    if (verbose) printf("sendmap\n");
     serverSend(msg, sizeof(char) * WIDTH * HEIGHT);
 }
 
@@ -656,7 +651,7 @@ void *serverListen(void *args) {
         if ((l = (int) listen_message(msg, HEIGHT * WIDTH, ipmsg, servListenerFD, 0)) > 0 && l < 4) {
             if (!gamestatus) addPlayer(msg[0]);
             sim_dir[(unsigned char) msg[0]] = msg[1];
-//            printf(ipmsg);
+//                if (verbose) printf(ipmsg);
         }
     }
     return NULL;
@@ -724,14 +719,14 @@ void clientLoop(int r, int g, int b, int button, uint32_t dir) {
     }
     //broadcast my dir
     char msg[2];
-    printf("%d%d", cli_pid, cli_dir);
+    if (verbose) printf("%d%d", cli_pid, cli_dir);
     msg[0] = cli_pid;
     msg[1] = cli_dir;
     clientSend(msg, 2 * sizeof(char));
 }
 
 void resetGame() {
-    printf("RESET GAME\n");
+    if (verbose) printf("RESET GAME\n");
     for (int pid = 0; pid < 8; ++pid) {
         if (sim_dir[pid] != UNDEF) {
             sim_x[pid] = sim_xspawn[pid];
@@ -752,7 +747,6 @@ void resetGame() {
 int laststatus = 0;
 
 void gameLoop(int r, int g, int b, int button, uint32_t dir) {
-    printf("GAME %d\n", sim_count_alive);
     if (laststatus == 0) {
         laststatus = 1;
         resetGame();
@@ -775,17 +769,18 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
     //
     switch (dir) {
         case NORTH:
-            printf("SERVER\n");
+        case SOUTH:
+            if (verbose) printf("SERVER\n");
             //SERVER MODE!
             server = 1;
             if (lastServer == 0) {
-                printf("C > S\n");
+                if (verbose) printf("C > S\n");
                 createServerSender();
                 createServerListener();
             }
             if (std == 0) {
                 if (pthread_create(&td, NULL, serverListen, NULL) == 0) {
-                    printf("SERVER THREAD\n");
+                    if (verbose) printf("SERVER THREAD\n");
                     std = 1;
                 }
             }
@@ -798,25 +793,17 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                 gamestatus = 1;
                 sim_dir[(int) cli_pid] = NORTH;
                 resetGame();
-                /*for (int i = 0; i < 8; i++) {
-                    if (sim_dir[i] == UNDEF) {
-                        sim_alive[i] = 0;
-                    } else {
-                        sim_alive[i] = 1;
-                        sim_count_alive++;
-                    }
-                }*/
             }
             break;
         default:
-            printf("CLIENT\n");
+            if (verbose) printf("CLIENT\n");
             server = 0;
             if (std == 1) {
                 pthread_join(td, NULL);
                 std = 0;
             }
             if (lastServer == 1) {
-                printf("S > C\n");
+                if (verbose) printf("S > C\n");
                 clearPlayers();
                 createClientListener();
                 createClientSender();
@@ -826,7 +813,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
                 //col = 3;
                 gamestatus = 1;
                 pthread_create(&td, NULL, clientListen, NULL);
-                printf("CLIENT THREAD\n");
+                if (verbose) printf("CLIENT THREAD\n");
             }
             break;
     }
@@ -868,12 +855,12 @@ int main(int argc, char *argv[]) {
     mem_base = map_phys_address(SPILED_REG_BASE_PHYS, SPILED_REG_SIZE, 0);
 
     if (argc != 2) {
-        perror("MOAR ARGS");
+        perror("One integer argument between 0 and 7 is expected");
         exit(1);
     } else {
         cli_pid = (char) atoi(argv[1]);
         if (cli_pid > 7 || cli_pid < 0) {
-            perror("BAD ARGS");
+            perror("One integer argument between 0 and 7 is expected");
             exit(1);
         }
     }
@@ -915,7 +902,6 @@ int main(int argc, char *argv[]) {
             parlcd_write_data(parlcd_mem_base, (uint16_t) c);
         }
     }
-
 
     /*parlcd_write_cmd(parlcd_mem_base, 0x2c);
     for (i = 0; i < 320 ; i++) {
@@ -960,6 +946,19 @@ int main(int argc, char *argv[]) {
     }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
