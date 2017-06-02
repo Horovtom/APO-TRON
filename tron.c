@@ -1,16 +1,9 @@
-/*******************************************************************
-  Simple program to check LCD functionality on MicroZed
-  based MZ_APO board designed by Petr Porazil at PiKRON
-
-  mzapo_lcdtest.c       - main and only file
-
-  (C) Copyright 2004 - 2017 by Pavel Pisa
-      e-mail:   pisa@cmp.felk.cvut.cz
-      homepage: http://cmp.felk.cvut.cz/~pisa
-      work:     http://www.pikron.com/
-      license:  any combination GPL, LGPL, MPL or BSD licenses
-
- *******************************************************************/
+/**
+ * TRON GAME for MicroZed APO by
+ * Tomas Horovsky   horovtom@fel.cvut.cz
+ * David Hrusa      hrusadav@fel.cvut.cz
+ * Martin Jahn      jahnmar2@fel.cvut.cz
+ */
 
 
 #define _POSIX_C_SOURCE 200112L
@@ -60,6 +53,7 @@ char *memdev = "/dev/mem";
 #define CLIENT_PORT 12345
 #define BROADCAST_ADDRESS "192.168.202.184"
 
+//region Color Definitions
 /* some RGB color definitions                                                 */
 #define Black           0x0000      /*   0,   0,   0 */
 #define Navy            0x000F      /*   0,   0, 128 */
@@ -80,6 +74,7 @@ char *memdev = "/dev/mem";
 #define Orange          0xFD20      /* 255, 165,   0 */
 #define GreenYellow     0xAFE5      /* 173, 255,  47 */
 #define Pink                        0xF81F
+//endregion
 
 //--------DISPLAY-----------------------------------
 //region variables
@@ -125,10 +120,6 @@ void parlcd_write_data(unsigned char *parlcd_mem_base, uint16_t data) {
     *(volatile uint16_t *) (parlcd_mem_base + PARLCD_REG_DATA_o) = data;
 }
 
-void parlcd_write_data2x(unsigned char *parlcd_mem_base, uint32_t data) {
-    *(volatile uint32_t *) (parlcd_mem_base + PARLCD_REG_DATA_o) = data;
-}
-
 void parlcd_delay(int msec) {
     struct timespec wait_delay = {.tv_sec = msec / 1000,
             .tv_nsec = (msec % 1000) * 1000 * 1000};
@@ -136,15 +127,6 @@ void parlcd_delay(int msec) {
 }
 
 void parlcd_hx8357_init(unsigned char *parlcd_mem_base) {
-    // toggle RST low to reset
-    /*
-        digitalWrite(_rst, HIGH);
-        parlcd_delay(50);
-        digitalWrite(_rst, LOW);
-        parlcd_delay(10);
-        digitalWrite(_rst, HIGH);
-        parlcd_delay(10);
-     */
     parlcd_write_cmd(parlcd_mem_base, 0x1);
     parlcd_delay(30);
 
@@ -234,15 +216,6 @@ void parlcd_hx8357_init(unsigned char *parlcd_mem_base) {
 
     parlcd_write_cmd(parlcd_mem_base, 0x3A); // Interface pixel format
     parlcd_write_data(parlcd_mem_base, 0x55);    // 16 bits per pixel
-
-    //parlcd_write_cmd(parlcd_mem_base, 0xCC); // Set panel characteristic
-    //parlcd_write_data(parlcd_mem_base, 0x09);    // S960>S1, G1>G480, R-G-B, normally black
-
-    //parlcd_write_cmd(parlcd_mem_base, 0xB3); // RGB interface
-    //parlcd_write_data(parlcd_mem_base, 0x43);
-    //parlcd_write_data(parlcd_mem_base, 0x00);
-    //parlcd_write_data(parlcd_mem_base, 0x06);
-    //parlcd_write_data(parlcd_mem_base, 0x06);
 
     parlcd_write_cmd(parlcd_mem_base, 0xB1); // Power control
     parlcd_write_data(parlcd_mem_base, 0x00);
@@ -548,7 +521,7 @@ void sendMap(char gameworld[HEIGHT][WIDTH]) {
         }
     }
     printf("sendmap\n");
-    serverSend(msg, sizeof(char)*WIDTH*HEIGHT);
+    serverSend(msg, sizeof(char) * WIDTH * HEIGHT);
 }
 
 void createServerSender() {
@@ -561,12 +534,12 @@ void serverSendPTable(char *playerIDs) {
 }
 
 void serverSend(char *buf, int size) {
-    sendto(servSenderFD, buf, size, 0, (const struct sockaddr *) &servSenderSockaddr,
+    sendto(servSenderFD, buf, (size_t) size, 0, (const struct sockaddr *) &servSenderSockaddr,
            sizeof(servSenderSockaddr));
 }
 
 void clientSend(char *buf, int size) {
-    sendto(cliSenderFD, buf, size, 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
+    sendto(cliSenderFD, buf, (size_t) size, 0, (const struct sockaddr *) &cliSenderSockaddr, sizeof(cliSenderSockaddr));
 }
 
 ssize_t listen_message(char *buf, int length, char *ipbuff, int fd, int flags) {
@@ -616,7 +589,7 @@ int sim_xspawn[8] = {5, 10, 15, 20, 25, 30, 35, 5};
 int sim_yspawn[8] = {5, 10, 15, 20, 25, 5, 10, 25};
 int sim_x[8];
 int sim_y[8];
-char sim_dir[8] = {UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,UNDEF};
+char sim_dir[8] = {UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF};
 int sim_alive[8];
 int sim_count_alive;
 //endregion
@@ -627,23 +600,19 @@ char cli_dir = NORTH;
 //endregion
 
 void addPlayer(int id) {
-    if(sim_dir[id]==UNDEF) {
+    if (sim_dir[id] == UNDEF) {
         if (connectedPlayerCount < 7) {
             connectedPlayerCount += 1;
-            sim_dir[id]=NORTH;
+            sim_dir[id] = NORTH;
         }
     }
 }
 
 void clearPlayers() {
     connectedPlayerCount = 0;
-    for(int i =0; i<8; ++i) {
+    for (int i = 0; i < 8; ++i) {
         sim_dir[i] = UNDEF;
     }
-}
-
-char *getPlayers() {
-    return "test";
 }
 
 //region functions
@@ -756,28 +725,28 @@ void serverLoop(int r, int g, int b, int button, uint32_t dir) {
 void clientLoop(int r, int g, int b, int button, uint32_t dir) {
     //CLIENT
     //receive world information
-    cli_dir = dir;
+    cli_dir = (char) (char) dir;
     for (int x = 0; x < WIDTH; ++x) {
         for (int y = 0; y < HEIGHT; ++y) {
             if (x > 0 && x < WIDTH - 1 && y > 0 && y < HEIGHT - 1) {
                 gameworld[y][x] = recieved_gameworld[y][x]; //TODO
             } else {
-                gameworld[y][x] = cli_pid+2;
+                gameworld[y][x] = (char) (cli_pid + 2);
             }
         }
     }
     //broadcast my dir
     char msg[2];
-    printf( "%d%d", cli_pid, cli_dir);
-    msg[0]=cli_pid;
-    msg[1]=cli_dir;
-    clientSend(msg, 2*sizeof(char));
+    printf("%d%d", cli_pid, cli_dir);
+    msg[0] = cli_pid;
+    msg[1] = cli_dir;
+    clientSend(msg, 2 * sizeof(char));
 }
 
 void resetGame() {
     printf("RESET GAME\n");
     for (int pid = 0; pid < 8; ++pid) {
-        if (sim_dir[pid] !=UNDEF) {
+        if (sim_dir[pid] != UNDEF) {
             sim_x[pid] = sim_xspawn[pid];
             sim_y[pid] = sim_yspawn[pid];
             sim_dir[pid] = NORTH;
@@ -841,7 +810,7 @@ void menuLoop(int r, int g, int b, int button, uint32_t dir) {
             if (button) {
                 col = 1;
                 gamestatus = 1;
-                sim_dir[(int) cli_pid]=NORTH;
+                sim_dir[(int) cli_pid] = NORTH;
                 resetGame();
                 /*for (int i = 0; i < 8; i++) {
                     if (sim_dir[i] == UNDEF) {
@@ -907,10 +876,6 @@ void logicLoop(int r, int g, int b, int button, uint32_t dir) {
     }
 }
 
-char *getPlayerIDTable() {
-    //TODO: IMPLEMENT
-    return NULL;
-}
 
 int main(int argc, char *argv[]) {
     unsigned char *mem_base;
@@ -922,7 +887,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     } else {
         cli_pid = (char) atoi(argv[1]);
-        if (cli_pid > 7 || cli_pid <0){
+        if (cli_pid > 7 || cli_pid < 0) {
             perror("BAD ARGS");
             exit(1);
         }
@@ -935,8 +900,8 @@ int main(int argc, char *argv[]) {
     for (i = 0; i < HEIGHT; ++i) {
         for (j = 0; j < WIDTH; ++j) {
             if (i == 0 || j == 0 || i == HEIGHT - 1 || j == WIDTH - 1) {
-                gameworld[i][j] = cli_pid+2;
-                recieved_gameworld[i][j] = cli_pid+2;
+                gameworld[i][j] = (char) (cli_pid + 2);
+                recieved_gameworld[i][j] = (char) (cli_pid + 2);
             } else {
                 gameworld[i][j] = 0;
                 recieved_gameworld[i][j] = 0;
@@ -945,7 +910,7 @@ int main(int argc, char *argv[]) {
 
     }
     for (i = 0; i < 8; i++) {
-        if(i!=(int)cli_pid) {
+        if (i != (int) cli_pid) {
             sim_dir[i] = UNDEF;
         }
     }
@@ -1009,5 +974,27 @@ int main(int argc, char *argv[]) {
         clock_nanosleep(CLOCK_MONOTONIC, 0, &loop_delay, NULL);
     }
 
-    return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//Congrats on 1000th line
